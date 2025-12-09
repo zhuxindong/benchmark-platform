@@ -3,32 +3,53 @@
     <div class="container">
       <div class="header">
         <div class="header-title-group">
-          <h1>🏆 基准测试排行榜</h1>
-          <p>基于真实环境的性能评测数据，实时更新</p>
+          <h1>{{ isReverse ? '🐢 卧龙凤雏榜' : '🏆 基准测试排行榜' }}</h1>
+          <p>{{ isReverse ? '性能最慢的设备排行，娱乐向' : '基于真实环境的性能评测数据，实时更新' }}</p>
         </div>
 
-        <!-- 设备类型选择器 -->
-        <div class="device-type-selector">
-          <label class="selector-label">显示范围</label>
-          <div class="device-type-buttons">
-            <button
-              @click="selectDeviceType(null)"
-              :class="['device-btn', { active: selectedDeviceType === null }]"
-            >
-              全部
-            </button>
-            <button
-              @click="selectDeviceType('server')"
-              :class="['device-btn', { active: selectedDeviceType === 'server' }]"
-            >
-              服务器
-            </button>
-            <button
-              @click="selectDeviceType('consumer')"
-              :class="['device-btn', { active: selectedDeviceType === 'consumer' }]"
-            >
-              消费级
-            </button>
+        <div class="header-controls">
+          <!-- 排行榜模式选择器 -->
+          <div class="device-type-selector">
+            <label class="selector-label">排行榜</label>
+            <div class="device-type-buttons">
+              <button
+                @click="toggleReverseMode(false)"
+                :class="['device-btn', { active: !isReverse }]"
+              >
+                🏆 性能榜
+              </button>
+              <button
+                @click="toggleReverseMode(true)"
+                :class="['device-btn', { active: isReverse }]"
+              >
+                🐢 卧龙凤雏榜
+              </button>
+            </div>
+          </div>
+
+          <!-- 设备类型选择器 -->
+          <div class="device-type-selector">
+            <label class="selector-label">显示范围</label>
+            <div class="device-type-buttons">
+              <button
+                @click="selectDeviceType(null)"
+                :class="['device-btn', { active: selectedDeviceType === null }]"
+              >
+                全部
+              </button>
+              <button
+                @click="selectDeviceType('server')"
+                :class="['device-btn', { active: selectedDeviceType === 'server' }]"
+              >
+                服务器
+              </button>
+              <button
+                @click="selectDeviceType('consumer')"
+                :class="['device-btn', { active: selectedDeviceType === 'consumer' }]"
+              >
+                消费级
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -150,6 +171,7 @@ const leaderboard = ref([])
 const loading = ref(false)
 const error = ref(null)
 const selectedDeviceType = ref(null)
+const isReverse = ref(false) // 是否为倒序模式（卧龙凤雏榜）
 const pagination = ref({
   page: 1,
   limit: 20,
@@ -169,6 +191,9 @@ const loadLeaderboard = async (page = 1) => {
     let endpoint = `/benchmarks/leaderboard?page=${page}&limit=${pagination.value.limit}`
     if (selectedDeviceType.value) {
       endpoint += `&device_type=${selectedDeviceType.value}`
+    }
+    if (isReverse.value) {
+      endpoint += `&reverse=true`
     }
 
     const response = await apiService.get(endpoint)
@@ -253,6 +278,13 @@ const selectDeviceType = (deviceType) => {
   loadLeaderboard(1)
 }
 
+// 切换排行榜模式（正序/倒序）
+const toggleReverseMode = (reverse) => {
+  isReverse.value = reverse
+  pagination.value.page = 1
+  loadLeaderboard(1)
+}
+
 const getDeviceTypeLabel = (deviceType) => {
   const labels = {
     'server': '服务器级',
@@ -314,6 +346,13 @@ const formatConfidence = (confidence) => {
   color: #86868B;
   margin: 0;
   font-weight: 400;
+}
+
+/* Header Controls - Multiple Selectors */
+.header-controls {
+  display: flex;
+  gap: 24px;
+  align-items: flex-end;
 }
 
 /* Device Selector - Integrated on the Right */

@@ -19,6 +19,7 @@ import hashlib
 import os
 from dotenv import load_dotenv
 from app.utils.device_classifier import DeviceTypeClassifier
+from app.core.config import settings
 
 # 加载环境变量
 load_dotenv()
@@ -542,7 +543,7 @@ class MockLoginRequest(BaseModel):
 async def mock_login(request: MockLoginRequest):
     """Mock登录 - 仅用于本地测试，无需OAuth服务"""
     # 检查是否启用Mock登录
-    if not config.ENABLE_MOCK_LOGIN:
+    if not settings.ENABLE_MOCK_LOGIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Mock登录功能已禁用。此功能仅用于开发环境，生产环境不可用。"
@@ -729,8 +730,8 @@ async def verify_token_endpoint(request: Request):
 
 # 基准测试结果管理API
 @app.get("/api/v1/benchmarks/leaderboard")
-async def get_leaderboard(device_type: Optional[str] = None, limit: int = 20, page: int = 1):
-    """获取排行榜数据"""
+async def get_leaderboard(device_type: Optional[str] = None, limit: int = 20, page: int = 1, reverse: bool = False):
+    """获取排行榜数据（reverse=True 显示最慢的设备）"""
     try:
         db = get_db()
         cursor = db.cursor(pymysql.cursors.DictCursor)
@@ -747,6 +748,9 @@ async def get_leaderboard(device_type: Optional[str] = None, limit: int = 20, pa
             params.append(device_type)
 
         where_clause = " AND ".join(where_conditions)
+        
+        # 根据 reverse 参数决定排序方向
+        order_direction = "DESC" if reverse else "ASC"
 
         # 获取排行榜数据，按总耗时排序
         cursor.execute(f"""
@@ -754,7 +758,7 @@ async def get_leaderboard(device_type: Optional[str] = None, limit: int = 20, pa
             FROM benchmark_results br
             JOIN users u ON br.user_id = u.id
             WHERE {where_clause}
-            ORDER BY br.overall_wall_time ASC
+            ORDER BY br.overall_wall_time {order_direction}
             LIMIT %s OFFSET %s
         """, params + [limit, offset])
 
