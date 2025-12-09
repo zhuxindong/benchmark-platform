@@ -8,6 +8,7 @@
         </div>
 
         <div class="header-controls">
+
           <!-- 排行榜模式选择器 -->
           <div class="device-type-selector">
             <label class="selector-label">排行榜</label>
@@ -51,8 +52,31 @@
               </button>
             </div>
           </div>
+
+          <!-- 我的排名卡片 (Moved to Right) -->
+          <div v-if="myRanks.length > 0" class="my-ranks-dropdown">
+            <div class="my-ranks-trigger">
+              📍 我的排名 ({{ myRanks.length }})
+            </div>
+            <div class="my-ranks-menu">
+              <div
+                v-for="record in myRanks"
+                :key="record.record_id"
+                @click="jumpToMyRecord(record)"
+                class="rank-menu-item"
+              >
+                <div class="rank-badge">#{{ record.rank }}</div>
+                <div class="rank-info">
+                  <span class="cpu">{{ record.cpu_model }}</span>
+                  <span class="time">{{ formatTime(record.overall_wall_time) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- 已移动到 header-controls 中 -->
 
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
@@ -80,10 +104,12 @@
             <div class="user-header">用户</div>
             <div class="hardware-header">硬件配置</div>
             <div class="device-header">设备类型</div>
+            <div class="phase-header">阶段一(秒)</div>
+            <div class="phase-header">阶段二(秒)</div>
             <div class="time-header">总耗时(秒)</div>
           </div>
 
-          <div v-for="(entry, index) in leaderboard" :key="entry.id || index" class="table-row" :class="{ 'top-three': entry.rank <= 3 }">
+          <div v-for="(entry, index) in leaderboard" :key="entry.id || index" class="table-row" :class="{ 'top-three': entry.rank <= 3, 'my-record': isMyRecord(entry) }">
             <div class="rank-cell">
               <span v-if="entry.rank === 1" class="medal gold">🥇</span>
               <span v-else-if="entry.rank === 2" class="medal silver">🥈</span>
@@ -124,14 +150,19 @@
               </div>
             </div>
 
+            <div class="phase-cell">
+              <div class="time-value">{{ formatTime(entry.phase1_wall_time) }}</div>
+            </div>
+
+            <div class="phase-cell">
+              <div class="time-value">{{ formatTime(entry.phase2_wall_time) }}</div>
+            </div>
+
             <div class="time-cell">
               <div class="overall-time">
                 {{ formatTime(entry.overall_wall_time) }}
               </div>
-              <div v-if="entry.phase1_wall_time && entry.phase2_wall_time" class="phase-times">
-                <small>阶段1: {{ formatTime(entry.phase1_wall_time) }}</small>
-                <small>阶段2: {{ formatTime(entry.phase2_wall_time) }}</small>
-              </div>
+              <span v-if="isMyRecord(entry)" class="my-record-badge">👤 我的记录</span>
             </div>
           </div>
         </div>
@@ -161,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, authActions } from '../stores/auth.js'
 import apiService from '../services/api.js'
@@ -172,6 +203,7 @@ const loading = ref(false)
 const error = ref(null)
 const selectedDeviceType = ref(null)
 const isReverse = ref(false) // 是否为倒序模式（卧龙凤雏榜）
+const myRanks = ref([]) // 用户的所有排名信息
 const pagination = ref({
   page: 1,
   limit: 20,
@@ -181,6 +213,7 @@ const pagination = ref({
 
 onMounted(() => {
   loadLeaderboard()
+  loadMyRanks() // 加载用户排名
 })
 
 const loadLeaderboard = async (page = 1) => {
@@ -276,6 +309,7 @@ const selectDeviceType = (deviceType) => {
   selectedDeviceType.value = deviceType
   pagination.value.page = 1
   loadLeaderboard(1)
+  loadMyRanks() // 重新加载用户排名
 }
 
 // 切换排行榜模式（正序/倒序）
@@ -283,6 +317,60 @@ const toggleReverseMode = (reverse) => {
   isReverse.value = reverse
   pagination.value.page = 1
   loadLeaderboard(1)
+  loadMyRanks() // 重新加载用户排名
+}
+
+// 加载用户排名信息
+const loadMyRanks = async () => {
+  if (!authState.isAuthenticated) {
+    myRanks.value = []
+    return
+  }
+  
+  try {
+    let endpoint = '/benchmarks/my-ranks'
+    const params = []
+    if (selectedDeviceType.value) {
+      params.push(`device_type=${selectedDeviceType.value}`)
+    }
+    if (isReverse.value) {
+      params.push('reverse=true')
+    }
+    if (params.length > 0) {
+      endpoint += '?' + params.join('&')
+    }
+    
+    const response = await apiService.get(endpoint)
+    if (response.success) {
+      myRanks.value = response.data.records
+    }
+  } catch (err) {
+    console.error('加载用户排名失败:', err)
+    myRanks.value = []
+  }
+}
+
+// 跳转到用户的指定记录
+const jumpToMyRecord = async (record) => {
+  await loadLeaderboard(record.page)
+  // 页面加载后滚动到该记录
+  await nextTick()
+  setTimeout(() => {
+    const tableRows = document.querySelectorAll('.table-row')
+    tableRows.forEach(row => {
+      // 查找包含当前 record_id 的行
+      const cpuModel = row.querySelector('.cpu-model')
+      if (cpuModel && cpuModel.textContent.trim() === record.cpu_model) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    })
+  }, 300)
+}
+
+// 判断是否为用户的记录
+const isMyRecord = (entry) => {
+  if (!authState.isAuthenticated || myRanks.value.length === 0) return false
+  return myRanks.value.some(rank => rank.record_id === entry.id)
 }
 
 const getDeviceTypeLabel = (deviceType) => {
@@ -316,9 +404,10 @@ const formatConfidence = (confidence) => {
 }
 
 .container {
-  max-width: 1400px; /* Wider layout */
-  margin: 0 auto;
-  padding: 0 24px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 20px; /* Minimal padding for edge-to-edge look */
 }
 
 /* ========================================
@@ -331,6 +420,12 @@ const formatConfidence = (confidence) => {
   align-items: flex-end;
   margin-bottom: 24px;
   padding: 0 4px;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
+  gap: 20px; /* Space between title and controls */
+}
+
+.header-title-group {
+  min-width: 200px;
 }
 
 .header-title-group h1 {
@@ -339,6 +434,7 @@ const formatConfidence = (confidence) => {
   color: #1D1D1F;
   margin: 0 0 4px 0;
   letter-spacing: -0.01em;
+  white-space: nowrap; /* Prevent title from breaking awkwardly */
 }
 
 .header-title-group p {
@@ -353,6 +449,159 @@ const formatConfidence = (confidence) => {
   display: flex;
   gap: 24px;
   align-items: flex-end;
+}
+
+/* ========================================
+   My Ranks Section
+   ======================================== */
+
+.my-ranks-section {
+  background: #F2F2F7;
+  padding: 20px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+
+/* My Ranks Dropdown */
+.my-ranks-dropdown {
+  position: relative;
+  /* Removed negative margin */
+}
+
+.my-ranks-trigger {
+  height: 40px;
+  padding: 0 16px;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-blue);
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.my-ranks-trigger:hover,
+.my-ranks-dropdown:hover .my-ranks-trigger {
+  border-color: var(--color-blue);
+  background: rgba(0, 113, 227, 0.05);
+}
+
+.my-ranks-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  width: 280px;
+  z-index: 100;
+  display: none;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Invisible bridge to prevent menu from closing when moving mouse over the gap */
+.my-ranks-menu::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: transparent;
+}
+
+.my-ranks-dropdown:hover .my-ranks-menu {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.rank-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.rank-menu-item:hover {
+  background: #F5F5F7;
+}
+
+.rank-badge {
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--color-blue);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.rank-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.rank-info .cpu {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-info .time {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rank-card:hover {
+  background: rgba(0, 113, 227, 0.05);
+  transform: translateX(4px);
+}
+
+.rank-number {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-blue);
+  min-width: 40px;
+}
+
+.cpu-model {
+  flex: 1;
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-card .time {
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.rank-card .arrow {
+  color: var(--text-secondary);
+  font-size: 18px;
 }
 
 /* Device Selector - Integrated on the Right */
@@ -435,21 +684,32 @@ const formatConfidence = (confidence) => {
    Leaderboard Content - Full Width Card
    ======================================== */
 
+/* Grid Layout Variable Definition */
 .leaderboard-content {
   background: #FFFFFF;
   border-radius: 18px;
-  overflow: hidden;
+  /* Removed overflow: hidden to prevent clipping of the scrollable table */
+  /* Instead, we set overflow-x: auto to create a scroll container */
+  overflow-x: auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0,0,0,0.06);
 }
 
 .leaderboard-table {
   width: 100%;
+  min-width: 900px;
+  /* overflow-x handled by parent */
+}
+
+/* Ensure consistent sizing */
+.table-header, .table-row {
+  box-sizing: border-box;
 }
 
 /* Table Header */
 .table-header {
   display: grid;
-  grid-template-columns: 80px 240px 1fr 140px 160px;
+  /* Rank | User | Hardware | Device | Phase1 | Phase2 | Total */
+  grid-template-columns: minmax(50px, 0.5fr) minmax(180px, 2fr) minmax(200px, 2.8fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(120px, 1.2fr);
   background: #FAFAFA;
   border-bottom: 1px solid #E5E5EA;
   padding: 12px 24px;
@@ -461,21 +721,47 @@ const formatConfidence = (confidence) => {
   color: #86868B;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  white-space: nowrap; /* Force headers to stay on one line */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Rows */
+/* Rows */
 .table-row {
   display: grid;
-  grid-template-columns: 80px 240px 1fr 140px 160px;
+  /* Same grid definition for alignment */
+  grid-template-columns: minmax(50px, 0.5fr) minmax(180px, 2fr) minmax(200px, 2.8fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(120px, 1.2fr);
   padding: 16px 24px;
   border-bottom: 1px solid #F5F5F7;
-  align-items: center;
+  align-items: center; /* Vertically align content within the grid row */
   transition: background 0.15s ease;
   background: #FFFFFF;
 }
 
 .table-row:hover {
   background: #F5F5F7;
+}
+
+/* My Record Highlight */
+.table-row.my-record {
+  background: rgba(0, 113, 227, 0.08);
+  border-left: 3px solid var(--color-blue);
+}
+
+.table-row.my-record:hover {
+  background: rgba(0, 113, 227, 0.12);
+}
+
+.my-record-badge {
+  display: inline-block;
+  background: var(--color-blue);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
 }
 
 .table-row:last-child {
@@ -575,12 +861,39 @@ const formatConfidence = (confidence) => {
   margin-left: 8px;
 }
 
-/* Time Cell */
-.time-cell {
-  text-align: right;
+/* Phase Cells */
+.phase-header {
+  text-align: center;
+}
+
+.phase-cell {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.time-value {
+  font-family: "SF Mono", SFMono-Regular, ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 14px;
+  color: #1D1D1F;
+}
+
+/* Time Cell */
+.time-cell {
+  /* Simplified for debugging */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center align to prevent truncation */
+  justify-content: center;
+  height: 100%;
+  padding-right: 0;
+}
+
+.table-header .time-header {
+  text-align: center;
 }
 
 .overall-time {
@@ -639,31 +952,11 @@ const formatConfidence = (confidence) => {
    Responsive
    ======================================== */
 
-@media (max-width: 1024px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-  
-  .table-header, .table-row {
-    grid-template-columns: 60px 200px 1fr 100px;
-  }
-  
-  .time-cell { grid-column: 4; }
-  .table-header > .device-header, .device-cell { display: none; }
-}
-
-@media (max-width: 768px) {
+/* Responsive adjustments removed to enforce consistent horizontal scrolling */
+@media (max-width: 480px) {
   .leaderboard { padding: 16px 0; }
   .container { padding: 0 16px; }
-  
-  .table-header, .table-row {
-    grid-template-columns: 50px 1fr 90px;
-    padding: 12px 16px;
-  }
-  
-  .hardware-cell, .table-header > .hardware-header { display: none; }
   .header-title-group h1 { font-size: 24px; }
 }
+
 </style>

@@ -884,6 +884,116 @@ async def get_my_benchmark_result(current_user = Depends(get_current_user_from_t
             detail=f"获取用户基准测试结果失败: {str(e)}"
         )
 
+@app.get("/api/v1/benchmarks/my-ranks")
+async def get_my_ranks(
+    device_type: Optional[str] = None,
+    reverse: bool = False,
+    current_user = Depends(get_current_user_from_token)
+):
+    """获取当前用户在排行榜中的所有排名信息"""
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+        
+        # 构建WHERE条件
+        where_conditions = ["br.overall_wall_time IS NOT NULL", "br.user_id = %s"]
+        params = [current_user["id"]]
+        
+        if device_type:
+            where_conditions.append("br.device_type = %s")
+            params.append(device_type)
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # 获取用户的所有记录
+        cursor.execute(f"""
+            SELECT br.*
+            FROM benchmark_results br
+            WHERE {where_clause}
+            ORDER BY br.overall_wall_time ASC
+        """, params)
+        
+        user_records = cursor.fetchall()
+        
+        if not user_records:
+            cursor.close()
+            db.close()
+            return {
+                "success": True,
+                "data": {"records": []},
+                "message": "用户没有符合条件的记录"
+            }
+        
+        # 为每条记录计算排名
+        records_with_ranks = []
+        for record in user_records:
+            # 构建排名查询的WHERE条件
+            rank_where_conditions = ["overall_wall_time IS NOT NULL"]
+            rank_params = []
+            
+            if device_type:
+                rank_where_conditions.append("device_type = %s")
+                rank_params.append(device_type)
+            
+            rank_where_clause = " AND ".join(rank_where_conditions)
+            
+            # 根据reverse参数决定排名计算方式
+            if reverse:
+                # 倒序：时间越长排名越高
+                cursor.execute(f"""
+                    SELECT COUNT(*) + 1 as `rank`
+                    FROM benchmark_results
+                    WHERE {rank_where_clause}
+                    AND overall_wall_time > %s
+                """, rank_params + [record["overall_wall_time"]])
+            else:
+                # 正序：时间越短排名越高
+                cursor.execute(f"""
+                    SELECT COUNT(*) + 1 as `rank`
+                    FROM benchmark_results
+                    WHERE {rank_where_clause}
+                    AND overall_wall_time < %s
+                """, rank_params + [record["overall_wall_time"]])
+            
+            rank_result = cursor.fetchone()
+            rank = rank_result["rank"]
+            
+            # 获取总数
+            cursor.execute(f"""
+                SELECT COUNT(*) as total
+                FROM benchmark_results
+                WHERE {rank_where_clause}
+            """, rank_params)
+            total_result = cursor.fetchone()
+            total = total_result["total"]
+            
+            # 计算所在页码（每页20条）
+            page = (rank - 1) // 20 + 1
+            
+            records_with_ranks.append({
+                "rank": rank,
+                "total": total,
+                "page": page,
+                "device_type": record.get("device_type", "unknown"),
+                "cpu_model": record["cpu_model"],
+                "overall_wall_time": float(record["overall_wall_time"]) if record["overall_wall_time"] else None,
+                "record_id": record["id"]
+            })
+        
+        cursor.close()
+        db.close()
+        
+        return {
+            "success": True,
+            "data": {"records": records_with_ranks}
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取用户排名失败: {str(e)}"
+        )
+
 @app.post("/api/v1/benchmarks/classify-device-type")
 async def classify_device_type(request: Dict[str, str]):
     """设备类型分类API"""
