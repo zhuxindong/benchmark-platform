@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="confirm-result">
     <div class="container">
       <!-- 用户信息 -->
@@ -387,39 +387,47 @@ const handleAvatarError = (event) => {
 </script>
 
 <style scoped>
+/* ========================================
+    Confirm Result - Apple Design System
+   ======================================== */
+
 .confirm-result {
   min-height: 100vh;
-  padding: 2rem 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 0;
+  background: var(--bg-body); /* Using global token */
 }
 
 .container {
-  max-width: 900px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 24px;
 }
 
+/* ========================================
+   User Profile Section
+   ======================================== */
+
 .user-info {
-  margin-bottom: 2rem;
+  margin-bottom: 32px;
 }
 
 .user-card {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 1.5rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 24px;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
+  gap: 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(0,0,0,0.05);
 }
 
 .user-avatar {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid #667eea;
+  border: 1px solid rgba(0,0,0,0.1);
 }
 
 .user-details {
@@ -427,265 +435,164 @@ const handleAvatarError = (event) => {
 }
 
 .user-details h3 {
-  margin: 0 0 0.3rem 0;
-  color: #333;
-  font-size: 1.4rem;
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .user-details p {
   margin: 0;
-  color: #666;
-  font-size: 1rem;
+  color: var(--text-secondary);
+  font-size: 15px;
 }
 
 .user-actions {
   display: flex;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .detail-btn, .home-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: rgba(0,0,0,0.05);
+  color: var(--text-primary);
   border: none;
-  padding: 0.8rem 1.5rem;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px; /* Pill shape */
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s;
 }
 
 .detail-btn:hover, .home-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+  background: rgba(0,0,0,0.1);
+  transform: none;
+  box-shadow: none;
 }
 
+/* ========================================
+   Confirm & Edit Card
+   ======================================== */
+
 .confirm-card {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 2.5rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(0,0,0,0.05); /* Subtle border */
+  backdrop-filter: none;
 }
 
 .card-header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 40px;
 }
 
 .card-header h2 {
-  color: #333;
-  font-size: 2rem;
-  margin-bottom: 0.8rem;
+  color: var(--text-primary);
+  font-size: 28px;
+  margin-bottom: 12px;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .card-header p {
-  color: #666;
-  font-size: 1.1rem;
-  line-height: 1.6;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
+/* ========================================
+   Form Grid
+   ======================================== */
+
 .result-section {
-  margin-bottom: 2rem;
+  margin-bottom: 32px;
 }
 
 .result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
 }
 
 .result-item {
-  background: #f8f9fa;
-  padding: 1.2rem;
-  border-radius: 12px;
-  border-left: 4px solid #667eea;
+  background: transparent;
+  padding: 0;
+  border: none;
 }
 
 .result-item label {
-  font-weight: 600;
-  color: #333;
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.result-item .value {
-  color: #555;
-  font-size: 1.1rem;
+  font-size: 13px;
   font-weight: 500;
-}
-
-.result-item .value.highlight {
-  color: #667eea;
-  font-weight: 700;
-  font-size: 1.2rem;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .editable-input {
   width: 100%;
-  padding: 0.6rem 0.8rem;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  background: white;
-  transition: all 0.3s ease;
-  color: #333;
+  padding: 12px 16px;
+  border: 1px solid #D1D1D6; /* Apple heavy border for inputs */
+  border-radius: 12px;
+  font-size: 17px; /* Apple standard body size */
+  font-weight: 400;
+  background: #FFFFFF;
+  transition: all 0.2s;
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .editable-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--color-blue);
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
 }
 
 .editable-input::placeholder {
-  color: #999;
-  font-style: italic;
+  color: #C7C7CC;
+  font-style: normal;
 }
 
-.original-text {
-  background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 12px;
-  border: 1px solid #e9ecef;
-}
+/* ========================================
+   Device Type Classifier
+   ======================================== */
 
-.original-text h3 {
-  margin: 0 0 1rem 0;
-  color: #333;
-  font-size: 1.2rem;
-}
-
-.text-preview {
-  background: white;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  max-height: 200px;
-  overflow-y: auto;
-  color: #495057;
-}
-
-.button-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.back-button {
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 25px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.back-button:hover {
-  background: #5a6268;
-  transform: translateY(-2px);
-}
-
-.submit-button {
-  background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%);
-  color: white;
-  border: none;
-  padding: 1rem 3rem;
-  border-radius: 25px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 10px 30px rgba(81, 207, 102, 0.3);
-  min-width: 150px;
-}
-
-.submit-button:hover:not(.disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 40px rgba(81, 207, 102, 0.4);
-}
-
-.submit-button.disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.error-message {
-  background: #ff6b6b;
-  color: white;
-  padding: 1rem;
-  border-radius: 12px;
-  text-align: center;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
-}
-
-.success-message {
-  background: #51cf66;
-  color: white;
-  padding: 1rem;
-  border-radius: 12px;
-  text-align: center;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(81, 207, 102, 0.3);
-}
-
-/* 设备类型分类样式 */
 .device-type-section {
-  background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 12px;
-  border: 1px solid #e9ecef;
-  margin-bottom: 2rem;
+  background: #F2F2F7; /* Apple separated section background */
+  padding: 24px;
+  border-radius: 16px;
+  border: none;
+  margin-bottom: 32px;
 }
 
 .device-type-section h3 {
-  margin: 0 0 1rem 0;
-  color: #333;
-  font-size: 1.2rem;
-}
-
-.device-type-display {
-  margin-bottom: 1.5rem;
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .classification-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  color: #666;
-  font-style: italic;
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: 15px;
 }
 
 .loading-spinner {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #667eea;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0,0,0,0.1);
+  border-top: 2px solid var(--color-blue);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 0.5rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  animation: spin 0.8s linear infinite;
+  margin-right: 10px;
 }
 
 .classification-result {
@@ -695,109 +602,197 @@ const handleAvatarError = (event) => {
 .device-type-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.8rem 1.2rem;
-  border-radius: 25px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
   color: white;
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 0.8rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.device-type-badge .device-icon {
-  font-size: 1.2rem;
-}
-
-.device-type-badge .device-text {
-  font-size: 1.1rem;
-}
-
-.device-type-badge .confidence {
-  font-size: 0.9rem;
-  opacity: 0.9;
   font-weight: 500;
+  font-size: 15px;
+  margin-bottom: 12px;
+  box-shadow: none;
 }
 
 .classification-text {
-  color: #666;
-  font-size: 0.9rem;
-  font-style: italic;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .device-type-manual {
-  margin-top: 1rem;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0,0,0,0.05);
 }
 
 .device-type-manual label {
   display: block;
-  margin-bottom: 0.8rem;
-  color: #333;
-  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .device-type-buttons {
   display: flex;
-  gap: 1rem;
+  gap: 12px;
   justify-content: center;
-  flex-wrap: wrap;
 }
 
 .device-type-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.8rem 1.2rem;
-  border: 2px solid;
-  border-radius: 20px;
-  font-weight: 600;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.95rem;
+  transition: all 0.2s;
+  font-size: 13px;
   background: white;
-}
-
-.device-type-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: var(--text-secondary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .device-type-btn.active {
   color: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.device-type-btn .device-icon {
-  font-size: 1rem;
+/* ========================================
+   Original Text Preview
+   ======================================== */
+
+.original-text {
+  background: #F2F2F7;
+  padding: 20px;
+  border-radius: 16px; /* consistent radius */
+  border: none;
 }
 
+.original-text h3 {
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.text-preview {
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.05);
+  font-family: "SF Mono", SFMono-Regular, ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #3A3A3C;
+  max-height: 150px;
+}
+
+/* ========================================
+   Action Buttons
+   ======================================== */
+
+.button-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-top: 24px;
+}
+
+.back-button {
+  background: rgba(0,0,0,0.05);
+  color: var(--text-primary);
+  border: none;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background: rgba(0,0,0,0.1);
+  transform: none;
+}
+
+.submit-button {
+  background: var(--color-blue);
+  color: white;
+  border: none;
+  padding: 12px 40px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: none;
+  min-width: 160px;
+}
+
+.submit-button:hover:not(.disabled) {
+  background: var(--color-blue-hover);
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+}
+
+.submit-button.disabled {
+  background: #E5E5EA;
+  color: #8E8E93;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Messages */
+.error-message, .success-message {
+  padding: 16px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 15px;
+  margin-top: 20px;
+}
+
+.error-message {
+  background: #FFF2F2;
+  color: #FF3B30;
+  border: 1px solid rgba(255, 59, 48, 0.1);
+}
+
+.success-message {
+  background: #F2FDF4;
+  color: #34C759;
+  border: 1px solid rgba(52, 199, 89, 0.1);
+}
+
+/* Responsive */
 @media (max-width: 768px) {
   .user-card {
     flex-direction: column;
     text-align: center;
   }
-
+  
   .user-actions {
     width: 100%;
     justify-content: center;
   }
-
+  
   .confirm-card {
-    padding: 2rem 1.5rem;
+    padding: 24px;
   }
-
-  .card-header h2 {
-    font-size: 1.8rem;
-  }
-
+  
   .result-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
-
+  
   .button-section {
-    flex-direction: column;
+    flex-direction: column-reverse; /* Put submit on top on mobile usually better, or keep standard order */
+    gap: 16px;
   }
-
+  
   .back-button, .submit-button {
     width: 100%;
   }

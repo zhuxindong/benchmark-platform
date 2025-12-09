@@ -241,7 +241,7 @@ def verify_token(token: str) -> Optional[dict]:
                 print("DEBUG: Token已过期")
                 return None
 
-                return payload
+        return payload
     except Exception as e:
         # print(f" Token验证异常: {e}")
         return None
@@ -532,6 +532,110 @@ async def logout():
         samesite="lax"
     )
     return response
+
+# Mock登录端点（仅用于本地测试）
+class MockLoginRequest(BaseModel):
+    username: str
+    email: Optional[str] = None
+
+@app.post("/api/v1/auth/mock-login")
+async def mock_login(request: MockLoginRequest):
+    """Mock登录 - 仅用于本地测试，无需OAuth服务"""
+    # 检查是否启用Mock登录
+    if not config.ENABLE_MOCK_LOGIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Mock登录功能已禁用。此功能仅用于开发环境，生产环境不可用。"
+        )
+    
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+        
+        # 查找或创建Mock用户
+        cursor.execute("SELECT * FROM users WHERE username = %s", (request.username,))
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            # 更新现有用户
+            cursor.execute("""
+                UPDATE users SET
+                    email = %s, updated_at = %s
+                WHERE id = %s
+            """, (
+                request.email or existing_user["email"],
+                datetime.now(timezone.utc),
+                existing_user["id"]
+            ))
+            user_id = existing_user["id"]
+        else:
+            # 创建新Mock用户
+            mock_user_id = f"mock_{secrets.token_urlsafe(8)}"
+            cursor.execute("""
+                INSERT INTO users (username, user_id, email, avatar_url, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                request.username,
+                mock_user_id,
+                request.email,
+                f"https://ui-avatars.com/api/?name={request.username}&background=667eea&color=fff",
+                datetime.now(timezone.utc),
+                datetime.now(timezone.utc)
+            ))
+            user_id = cursor.lastrowid
+        
+        # 获取用户信息
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user_record = cursor.fetchone()
+        
+        db.commit()
+        cursor.close()
+        db.close()
+        
+        # 创建JWT令牌
+        token_data = {
+            "user_id": int(user_record["id"]),
+            "username": str(user_record["username"]),
+            "user_do_id": str(user_record["user_id"])
+        }
+        access_token = create_jwt_token(token_data)
+        
+        # 返回响应并设置cookie
+        response = JSONResponse(content={
+            "success": True,
+            "message": "Mock登录成功",
+            "user": {
+                "id": user_record["id"],
+                "username": user_record["username"],
+                "user_id": user_record["user_id"],
+                "email": user_record.get("email"),
+                "avatar_url": user_record.get("avatar_url")
+            }
+        })
+        
+        # 设置cookie
+        response.set_cookie(
+            key="auth_token",
+            value=access_token,
+            max_age=24*60*60,  # 24小时
+            expires=datetime.now(timezone.utc) + timedelta(hours=24),
+            path="/",
+            domain=None,
+            secure=False,  # 开发环境设为False
+            httponly=True,  # 防止XSS攻击
+            samesite="lax"
+        )
+        
+        return response
+        
+    except Exception as e:
+        import traceback
+        error_detail = f"Mock登录失败: {str(e)}\n详细错误: {traceback.format_exc()}"
+        print(error_detail)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Mock登录失败: {str(e)}"
+        )
 
 # 基准测试相关路由
 @app.post("/api/v1/benchmarks/parse")

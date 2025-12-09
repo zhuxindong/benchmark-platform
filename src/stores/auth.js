@@ -115,6 +115,38 @@ export const authActions = {
     }
   },
 
+  // Mock登录（仅用于本地测试）
+  async mockLogin(username, email = null) {
+    try {
+      authState.loading = true
+      authState.error = null
+
+      const result = await apiService.mockLogin(username, email)
+
+      if (result.success) {
+        // 设置用户信息
+        authState.user = result.user
+        authState.isAuthenticated = true
+
+        return {
+          success: true,
+          user: result.user
+        }
+      } else {
+        throw new Error(result.message || 'Mock登录失败')
+      }
+    } catch (error) {
+      console.error('Mock登录失败:', error)
+      authState.error = error.message
+      return {
+        success: false,
+        error: error.message
+      }
+    } finally {
+      authState.loading = false
+    }
+  },
+
   // 清除错误
   clearError() {
     authState.error = null

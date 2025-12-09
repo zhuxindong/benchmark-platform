@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="benchmark-detail">
     <div class="container">
       <div v-if="loading" class="loading">
@@ -331,78 +331,96 @@ const deleteRecord = async (record) => {
 </script>
 
 <style scoped>
+/* ========================================
+    Benchmark Detail (Apple Style)
+   ======================================== */
+
 .benchmark-detail {
-  min-height: 100vh;
-  padding: 2rem 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: 100%;
+  padding-bottom: 60px;
 }
 
 .container {
-  max-width: 800px;
+  max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 22px;
 }
+
+/* ========================================
+   States
+   ======================================== */
 
 .loading, .error, .no-data {
   text-align: center;
-  padding: 4rem 2rem;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  margin: 2rem 0;
+  padding: 80px 24px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  margin-top: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  border: 3px solid var(--border-light);
+  border-top: 3px solid var(--color-blue);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 24px;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.error h2, .no-data h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.error p, .no-data p {
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin-bottom: 24px;
 }
 
 .error-icon, .no-data-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
+  font-size: 56px;
+  margin-bottom: 24px;
 }
 
 .retry-button, .upload-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-blue);
   color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 25px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-top: 1rem;
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .retry-button:hover, .upload-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  background: var(--color-blue-hover);
+  transform: scale(1.02);
 }
 
-.benchmark-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
+/* ========================================
+   User Profile Section
+   ======================================== */
 
 .user-section {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 2rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  margin-top: 24px;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  gap: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .user-avatar {
@@ -410,141 +428,164 @@ const deleteRecord = async (record) => {
   height: 80px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid #667eea;
+  border: 1px solid var(--border-light);
 }
 
 .user-info h2 {
-  margin: 0 0 0.5rem 0;
-  color: #333;
-  font-size: 1.8rem;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
 .user-info p {
-  margin: 0 0 0.8rem 0;
-  color: #666;
-  font-size: 1.1rem;
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 12px;
 }
 
 .user-stats {
   display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .stat-item {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
-  padding: 0.3rem 0.8rem;
-  border-radius: 15px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  background: var(--bg-body);
+  color: var(--text-secondary);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .actions {
   margin-left: auto;
+  display: flex;
+  gap: 12px;
 }
 
-.records-section {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  margin-bottom: 2rem;
+.modify-btn {
+  background: var(--color-blue);
+  color: white;
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
-.records-section h3 {
-  margin: 0 0 1.5rem 0;
-  color: #333;
-  font-size: 1.4rem;
+.modify-btn:hover:not(.disabled) {
+  background: var(--color-blue-hover);
+}
+
+.modify-btn.disabled {
+  background: var(--border-light);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.leaderboard-btn-small {
+  background: rgba(0,0,0,0.05);
+  color: var(--text-primary);
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.leaderboard-btn-small:hover {
+  background: rgba(0,0,0,0.1);
+}
+
+/* ========================================
+   Records List
+   ======================================== */
+
+.benchmark-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.records-section, .hardware-section, .performance-section, .info-section {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow-sm);
+}
+
+h3 {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 24px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .records-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .record-item {
-  background: #f8f9fa;
-  border: 2px solid #e9ecef;
-  border-radius: 12px;
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  background: var(--bg-body);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .record-item:hover {
-  border-color: #667eea;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  background: #E8E8ED;
 }
 
 .record-item.active {
-  border-color: #667eea;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  background: #F0F7FF;
+  border-color: rgba(0, 113, 227, 0.2);
 }
 
 .record-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.8rem;
+  margin-bottom: 8px;
+}
+
+.record-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: rgba(0,0,0,0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.record-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .record-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .action-btn {
-  padding: 0.3rem 0.6rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: all 0.3s ease;
-  opacity: 0.8;
+  font-size: 14px;
+  padding: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
 }
 
 .action-btn:hover {
   opacity: 1;
-  transform: scale(1.1);
-}
-
-.edit-btn {
-  background: #667eea;
-  color: white;
-}
-
-.edit-btn:hover {
-  background: #5a6fd8;
-}
-
-.delete-btn {
-  background: #ff6b6b;
-  color: white;
-}
-
-.delete-btn:hover {
-  background: #ff5252;
-}
-
-.record-number {
-  background: #667eea;
-  color: white;
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.record-date {
-  color: #666;
-  font-size: 0.9rem;
 }
 
 .record-summary {
@@ -554,233 +595,167 @@ const deleteRecord = async (record) => {
 }
 
 .cpu-info {
-  flex: 1;
-  font-weight: 600;
-  color: #333;
-  margin-right: 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
 .performance-info {
   display: flex;
+  gap: 12px;
   align-items: center;
-  gap: 0.8rem;
-  flex-shrink: 0;
 }
 
 .time {
-  background: #28a745;
-  color: white;
-  padding: 0.2rem 0.6rem;
-  border-radius: 8px;
-  font-size: 0.8rem;
+  font-family: "SF Mono", monospace;
+  font-size: 14px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
-.device-type {
-  padding: 0.2rem 0.6rem;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
+/* ========================================
+   Hardware & Info Grids
+   ======================================== */
 
-.device-server {
-  background: #007bff;
-  color: white;
-}
-
-.device-consumer {
-  background: #28a745;
-  color: white;
-}
-
-.device-unknown {
-  background: #6c757d;
-  color: white;
-}
-
-.hardware-section, .performance-section, .info-section {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-}
-
-.hardware-section h3, .performance-section h3, .info-section h3 {
-  margin: 0 0 1.5rem 0;
-  color: #333;
-  font-size: 1.4rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.hardware-grid {
+.hardware-grid, .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
 }
 
-.hardware-item {
-  display: flex;
-  flex-direction: column;
+.hardware-item label, .info-item label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.hardware-item label {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
+.hardware-item .value, .info-item .value {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
-.hardware-item .value {
-  font-size: 1.2rem;
-  color: #333;
-  font-weight: 700;
-}
+/* ========================================
+   Performance Cards
+   ======================================== */
 
 .performance-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
 }
 
 .performance-card {
-  background: #f8f9fa;
-  border-radius: 15px;
-  padding: 1.5rem;
+  background: var(--bg-body);
+  border-radius: var(--radius-md);
+  padding: 24px;
   text-align: center;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
-}
-
-.performance-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .performance-card.highlight {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: #667eea;
+  background: #F0F7FF; /* Very light blue */
 }
 
-.performance-card .card-header {
+.performance-card.highlight .card-value {
+  color: var(--color-blue);
+}
+
+.card-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.performance-card .icon {
-  font-size: 2rem;
+.card-header .icon {
+  font-size: 32px;
 }
 
-.performance-card .label {
+.card-header .label {
+  font-size: 13px;
   font-weight: 600;
-  font-size: 1rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.performance-card .card-value {
-  font-size: 2rem;
+.card-value {
+  font-size: 32px;
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-family: "SF Pro Display", sans-serif;
+  letter-spacing: -0.02em;
 }
 
-.performance-card .unit {
-  font-size: 0.9rem;
-  font-weight: 400;
-  opacity: 0.8;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.info-item label {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-.info-item .value {
-  font-size: 1.1rem;
-  color: #333;
+.card-value .unit {
+  font-size: 14px;
   font-weight: 500;
+  color: var(--text-tertiary);
+  margin-left: 2px;
 }
 
+/* ========================================
+   Device Tags
+   ======================================== */
 
-.leaderboard-btn-small {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-  border: none;
-  padding: 0.8rem 1.2rem;
-  border-radius: 20px;
-  font-size: 0.9rem;
+.device-type {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.leaderboard-btn-small:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+.device-server {
+  background: #E8F2FF;
+  color: var(--color-blue);
 }
 
-.modify-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 0.8rem 1.5rem;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.device-consumer {
+  background: #E6F8EA;
+  color: var(--color-green);
 }
 
-.modify-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+.device-unknown {
+  background: var(--bg-body);
+  color: var(--text-tertiary);
 }
 
-.modify-btn.disabled {
-  background: #6c757d;
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.modify-btn.disabled:hover {
-  transform: none;
-  box-shadow: none;
-}
+/* ========================================
+   Responsive
+   ======================================== */
 
 @media (max-width: 768px) {
   .user-section {
     flex-direction: column;
     text-align: center;
+    padding: 24px;
   }
 
   .actions {
+    margin-top: 16px;
     margin-left: 0;
-    margin-top: 1rem;
+    width: 100%;
+    justify-content: center;
   }
-
-  .performance-grid {
+  
+  .hardware-grid, .info-grid, .performance-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 }
 </style>
+.benchmark-detail {
+  min-height: 100vh;
+  padding: 2rem 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}

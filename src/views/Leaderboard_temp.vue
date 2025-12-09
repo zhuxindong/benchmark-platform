@@ -1,15 +1,13 @@
-﻿<template>
+<template>
   <div class="leaderboard">
     <div class="container">
       <div class="header">
-        <div class="header-title-group">
-          <h1>🏆 基准测试排行榜</h1>
-          <p>基于真实环境的性能评测数据，实时更新</p>
-        </div>
+        <h1>🏆 基准测试排行�?/h1>
+        <p>展示最快的基准测试结果，按总耗时排序</p>
 
-        <!-- 设备类型选择器 -->
+        <!-- 设备类型选择�?-->
         <div class="device-type-selector">
-          <label class="selector-label">显示范围</label>
+          <label class="selector-label">设备类型�?/label>
           <div class="device-type-buttons">
             <button
               @click="selectDeviceType(null)"
@@ -21,13 +19,13 @@
               @click="selectDeviceType('server')"
               :class="['device-btn', { active: selectedDeviceType === 'server' }]"
             >
-              服务器
+              服务器级
             </button>
             <button
               @click="selectDeviceType('consumer')"
               :class="['device-btn', { active: selectedDeviceType === 'consumer' }]"
             >
-              消费级
+              消费�?
             </button>
           </div>
         </div>
@@ -35,11 +33,11 @@
 
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
-        <p>正在加载排行榜数据...</p>
+        <p>正在加载排行榜数�?..</p>
       </div>
 
       <div v-else-if="error" class="error">
-        <div class="error-icon">❌</div>
+        <div class="error-icon">�?/div>
         <h2>加载失败</h2>
         <p>{{ error }}</p>
         <button @click="loadLeaderboard" class="retry-button">重试</button>
@@ -49,7 +47,7 @@
         <div class="empty-icon">📊</div>
         <h2>暂无数据</h2>
         <p>还没有人上传基准测试结果</p>
-        <button @click="handleUpload" class="upload-button">成为第一个上传者</button>
+        <button @click="handleUpload" class="upload-button">成为第一个上传�?/button>
       </div>
 
       <div v-else class="leaderboard-content">
@@ -59,7 +57,7 @@
             <div class="user-header">用户</div>
             <div class="hardware-header">硬件配置</div>
             <div class="device-header">设备类型</div>
-            <div class="time-header">总耗时(秒)</div>
+            <div class="time-header">总耗时(�?</div>
           </div>
 
           <div v-for="(entry, index) in leaderboard" :key="entry.id || index" class="table-row" :class="{ 'top-three': entry.rank <= 3 }">
@@ -86,7 +84,7 @@
                   {{ entry.cpu_model || '未知CPU' }}
                 </div>
                 <div class="specs">
-                  <span v-if="entry.cpu_cores">{{ entry.cpu_cores }}核</span>
+                  <span v-if="entry.cpu_cores">{{ entry.cpu_cores }}�?/span>
                   <span v-if="entry.memory_gb">{{ entry.memory_gb }}GB</span>
                 </div>
               </div>
@@ -98,7 +96,7 @@
                   {{ getDeviceTypeLabel(entry.device_type) }}
                 </span>
                 <div v-if="entry.device_type_confidence" class="confidence">
-                  置信度: {{ formatConfidence(entry.device_type_confidence) }}
+                  置信�? {{ formatConfidence(entry.device_type_confidence) }}
                 </div>
               </div>
             </div>
@@ -121,17 +119,17 @@
             :disabled="pagination.page === 1"
             class="pagination-btn"
           >
-            上一页
+            上一�?
           </button>
           <span class="page-info">
-            第 {{ pagination.page }} 页，共 {{ pagination.total_pages }} 页
+            �?{{ pagination.page }} 页，�?{{ pagination.total_pages }} �?
           </span>
           <button
             @click="nextPage"
             :disabled="pagination.page === pagination.total_pages"
             class="pagination-btn"
           >
-            下一页
+            下一�?
           </button>
         </div>
       </div>
@@ -177,11 +175,11 @@ const loadLeaderboard = async (page = 1) => {
       leaderboard.value = response.data.leaderboard
       pagination.value = response.data.pagination
     } else {
-      throw new Error('获取排行榜数据失败')
+      throw new Error('获取排行榜数据失�?)
     }
   } catch (err) {
-    console.error('加载排行榜失败:', err)
-    error.value = err.message || '加载排行榜失败'
+    console.error('加载排行榜失�?', err)
+    error.value = err.message || '加载排行榜失�?
   } finally {
     loading.value = false
   }
@@ -197,7 +195,7 @@ const handleUpload = async () => {
       console.error('登录失败:', error)
     }
   } else {
-    // 如果已登录，直接跳转到上传页面
+    // 如果已登录，直接跳转到上传页�?
     router.push('/upload')
   }
 }
@@ -256,7 +254,7 @@ const selectDeviceType = (deviceType) => {
 const getDeviceTypeLabel = (deviceType) => {
   const labels = {
     'server': '服务器级',
-    'consumer': '消费级',
+    'consumer': '消费�?,
     'unknown': '未知'
   }
   return labels[deviceType] || '未知'
@@ -271,360 +269,3 @@ const formatConfidence = (confidence) => {
   return (confidence * 100).toFixed(0) + '%'
 }
 </script>
-
-<style scoped>
-/* ========================================
-    Leaderboard - Premium Dashboard Style
-   ======================================== */
-
-.leaderboard {
-  min-height: 100vh;
-  background: #F5F5F7;
-  padding: 32px 0;
-}
-
-.container {
-  max-width: 1400px; /* Wider layout */
-  margin: 0 auto;
-  padding: 0 24px;
-}
-
-/* ========================================
-   Header Section - Compact & Functional
-   ======================================== */
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-  padding: 0 4px;
-}
-
-.header-title-group h1 {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1D1D1F;
-  margin: 0 0 4px 0;
-  letter-spacing: -0.01em;
-}
-
-.header-title-group p {
-  font-size: 15px;
-  color: #86868B;
-  margin: 0;
-  font-weight: 400;
-}
-
-/* Device Selector - Integrated on the Right */
-.device-type-selector {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.selector-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #6E6E73;
-}
-
-.device-type-buttons {
-  display: inline-flex;
-  background: #E8E8ED;
-  padding: 2px;
-  border-radius: 9px;
-}
-
-.device-btn {
-  padding: 6px 16px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: #6E6E73;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.device-btn:hover {
-  color: #1D1D1F;
-}
-
-.device-btn.active {
-  background: #FFFFFF;
-  color: #1D1D1F;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  font-weight: 600;
-}
-
-/* ========================================
-   States
-   ======================================== */
-
-.loading, .error, .empty {
-  text-align: center;
-  padding: 60px 0;
-  background: transparent;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(0,0,0,0.1);
-  border-top: 3px solid #0071E3;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 16px;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.error-icon, .empty-icon { font-size: 48px; margin-bottom: 16px; }
-.retry-button, .upload-button {
-  background: #0071E3;
-  color: white;
-  padding: 8px 24px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 500;
-  margin-top: 16px;
-}
-
-/* ========================================
-   Leaderboard Content - Full Width Card
-   ======================================== */
-
-.leaderboard-content {
-  background: #FFFFFF;
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0,0,0,0.06);
-}
-
-.leaderboard-table {
-  width: 100%;
-}
-
-/* Table Header */
-.table-header {
-  display: grid;
-  grid-template-columns: 80px 240px 1fr 140px 160px;
-  background: #FAFAFA;
-  border-bottom: 1px solid #E5E5EA;
-  padding: 12px 24px;
-}
-
-.table-header > div {
-  font-size: 12px;
-  font-weight: 600;
-  color: #86868B;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-/* Rows */
-.table-row {
-  display: grid;
-  grid-template-columns: 80px 240px 1fr 140px 160px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #F5F5F7;
-  align-items: center;
-  transition: background 0.15s ease;
-  background: #FFFFFF;
-}
-
-.table-row:hover {
-  background: #F5F5F7;
-}
-
-.table-row:last-child {
-  border-bottom: none;
-}
-
-/* Rank Cell */
-.rank-cell {
-  display: flex;
-  align-items: center;
-}
-
-.medal { font-size: 24px; }
-.rank-number {
-  color: #86868B;
-  font-size: 14px;
-  font-weight: 500;
-  width: 28px;
-  text-align: center;
-}
-
-/* User Cell */
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid rgba(0,0,0,0.08);
-}
-
-.username {
-  font-weight: 600;
-  color: #1D1D1F;
-  font-size: 15px;
-}
-
-/* Hardware Cell */
-.hardware-cell {
-  padding-right: 24px;
-}
-
-.hardware-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.cpu-model {
-  font-weight: 500;
-  color: #1D1D1F;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.specs {
-  display: flex;
-  gap: 8px;
-}
-
-.specs span {
-  font-size: 11px;
-  color: #6E6E73;
-  background: #F5F5F7;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-/* Device Cell */
-.device-cell {
-  display: flex;
-  align-items: center;
-}
-
-.device-type {
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.device-type-server { background: #E8F2FF; color: #0071E3; }
-.device-type-consumer { background: #E6F8EA; color: #34C759; }
-.device-type-unknown { background: #F5F5F7; color: #86868B; }
-
-.confidence {
-  font-size: 10px;
-  color: #86868B;
-  margin-top: 4px;
-  margin-left: 8px;
-}
-
-/* Time Cell */
-.time-cell {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.overall-time {
-  font-family: "SF Mono", SFMono-Regular, ui-monospace, monospace;
-  font-weight: 600;
-  font-size: 16px;
-  color: #1D1D1F;
-  margin-bottom: 2px;
-}
-
-.phase-times {
-  font-size: 11px;
-  color: #86868B;
-  opacity: 0.8;
-}
-
-/* Pagination */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 24px;
-  gap: 16px;
-  background: #FBFBFC;
-  border-top: 1px solid #E5E5EA;
-}
-
-.pagination-btn {
-  background: white;
-  border: 1px solid #E5E5EA;
-  color: #1D1D1F;
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  transition: all 0.2s;
-}
-
-.pagination-btn:hover:not(:disabled) {
-  background: #F5F5F7;
-}
-
-.pagination-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-  box-shadow: none;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #86868B;
-}
-
-/* ========================================
-   Responsive
-   ======================================== */
-
-@media (max-width: 1024px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-  
-  .table-header, .table-row {
-    grid-template-columns: 60px 200px 1fr 100px;
-  }
-  
-  .time-cell { grid-column: 4; }
-  .table-header > .device-header, .device-cell { display: none; }
-}
-
-@media (max-width: 768px) {
-  .leaderboard { padding: 16px 0; }
-  .container { padding: 0 16px; }
-  
-  .table-header, .table-row {
-    grid-template-columns: 50px 1fr 90px;
-    padding: 12px 16px;
-  }
-  
-  .hardware-cell, .table-header > .hardware-header { display: none; }
-  .header-title-group h1 { font-size: 24px; }
-}
-</style>

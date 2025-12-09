@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     LEADERBOARD_PAGE_SIZE: int = 20
     LEADERBOARD_CACHE_TTL: int = 300  # 5分钟
 
+    # Mock 登录开关（仅用于开发环境，生产环境必须关闭）
+    ENABLE_MOCK_LOGIN: bool = False
+
     def get_logger(self, name: str = None):
         """获取日志记录器"""
         if name:

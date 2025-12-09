@@ -137,6 +137,11 @@ class ApiService {
     return result
   }
 
+  // Mock登录（仅用于本地测试）
+  async mockLogin(username, email = null) {
+    return this.post('/auth/mock-login', { username, email })
+  }
+
   // 基准测试相关API
   async parseBenchmarkText(text) {
     return this.post('/benchmarks/parse', { text })
@@ -185,6 +190,7 @@ export const {
   getCurrentUser,
   verifyToken,
   logout,
+  mockLogin,
   parseBenchmarkText,
   submitBenchmark,
   getMyResults,
@@ -199,6 +205,7 @@ export const {
   getCurrentUser: () => apiService.getCurrentUser(),
   verifyToken: () => apiService.verifyToken(),
   logout: () => apiService.logout(),
+  mockLogin: (username, email) => apiService.mockLogin(username, email),
   parseBenchmarkText: (text) => apiService.parseBenchmarkText(text),
   submitBenchmark: (data) => apiService.submitBenchmark(data),
   getMyResults: (page, limit) => apiService.getMyResults(page, limit),

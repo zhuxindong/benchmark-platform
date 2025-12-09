@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="oauth-callback">
     <div class="container">
       <div class="callback-card">
@@ -103,117 +103,112 @@ const goToHome = () => {
 </script>
 
 <style scoped>
+/* ========================================
+    OAuth Callback - Apple Design System
+   ======================================== */
+
 .oauth-callback {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+  background: var(--bg-body); /* Global light gray */
 }
 
 .container {
   width: 100%;
-  max-width: 500px;
+  max-width: 440px;
 }
 
 .callback-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 3rem 2rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 48px 32px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(0,0,0,0.05);
   text-align: center;
+  backdrop-filter: none;
 }
 
 .processing, .error, .success {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: 24px;
 }
 
+/* Spinner */
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  width: 48px;
+  height: 48px;
+  border: 4px solid #E5E5EA;
+  border-top: 4px solid var(--color-blue);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+/* Icons */
 .error-icon, .success-icon {
-  font-size: 4rem;
+  font-size: 56px;
   line-height: 1;
+  margin-bottom: 8px;
 }
 
 h2 {
-  color: #333;
-  font-size: 1.5rem;
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 700;
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 p {
-  color: #666;
-  font-size: 1.1rem;
+  color: var(--text-secondary);
+  font-size: 16px;
   margin: 0;
-  max-width: 300px;
   line-height: 1.5;
 }
 
+/* Buttons */
 .retry-button {
-  background: #ff6b6b;
-  color: white;
+  background: #E5E5EA;
+  color: var(--text-primary);
   border: none;
-  padding: 0.8rem 2rem;
-  border-radius: 25px;
-  font-size: 1rem;
+  padding: 12px 32px;
+  border-radius: 999px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s;
 }
 
 .retry-button:hover {
-  background: #ff5252;
-  transform: translateY(-2px);
+  background: #D1D1D6;
 }
 
 .continue-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-blue);
   color: white;
   border: none;
-  padding: 0.8rem 2rem;
-  border-radius: 25px;
-  font-size: 1rem;
+  padding: 12px 40px;
+  border-radius: 999px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  transition: all 0.2s;
 }
 
 .continue-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+  background: var(--color-blue-hover);
+  transform: scale(1.02);
 }
 
 @media (max-width: 600px) {
   .callback-card {
-    margin: 0 1rem;
-    padding: 2rem 1.5rem;
-  }
-
-  h2 {
-    font-size: 1.3rem;
-  }
-
-  p {
-    font-size: 1rem;
+    padding: 40px 24px;
   }
 }
 </style>
