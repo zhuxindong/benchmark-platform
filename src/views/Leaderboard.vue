@@ -420,6 +420,7 @@ const formatConfidence = (confidence) => {
   max-width: none;
   margin: 0;
   padding: 0 20px; /* Minimal padding for edge-to-edge look */
+  box-sizing: border-box; /* Ensure padding doesn't affect total width */
 }
 
 /* ========================================
@@ -831,6 +832,9 @@ const formatConfidence = (confidence) => {
   color: #1D1D1F;
   font-size: 14px;
   margin-bottom: 4px;
+  /* Allow text wrapping */
+  white-space: normal;
+  word-break: break-word;
 }
 
 .specs {

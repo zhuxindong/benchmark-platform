@@ -34,7 +34,7 @@
         </div>
       </div>
     </nav>
-    <main class="main-content">
+    <main class="main-content" :class="{ 'full-width': isFullWidthPage }">
       <router-view />
     </main>
 
@@ -59,10 +59,16 @@
 
 <script setup>
 import { onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { authState, authActions, initializeAuth } from './stores/auth.js'
 
 const router = useRouter()
+const route = useRoute()
+
+// 判断是否为需要全宽显示的页面
+const isFullWidthPage = computed(() => {
+  return ['Leaderboard'].includes(route.name)
+})
 
 // 计算属性
 const isLoggedIn = computed(() => authState.isAuthenticated)
@@ -536,6 +542,11 @@ button {
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 40px 22px;
+}
+
+.main-content.full-width {
+  max-width: 85%;
+  padding: 0;
 }
 
 /* ========================================
