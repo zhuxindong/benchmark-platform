@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState, authActions } from '../stores/auth.js'
 import apiService from '../services/api.js'
@@ -213,7 +213,19 @@ const pagination = ref({
 
 onMounted(() => {
   loadLeaderboard()
-  loadMyRanks() // 加载用户排名
+  // Try to load immediately (in case already authenticated)
+  if (authState.isAuthenticated) {
+    loadMyRanks()
+  }
+})
+
+// Watch for authentication state changes (handles page reload / async login check)
+watch(() => authState.isAuthenticated, (newValue) => {
+  if (newValue) {
+    loadMyRanks()
+  } else {
+    myRanks.value = []
+  }
 })
 
 const loadLeaderboard = async (page = 1) => {
