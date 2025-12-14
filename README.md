@@ -1,196 +1,112 @@
 # 🚀 基准测试评分平台
 
-一个基于 Vue.js + FastAPI + MySQL 的基准测试评分平台，集成 linux.do OAuth 认证。
+一个基于 Vue.js + FastAPI + MySQL 的现代化基准测试评分平台，集成 linux.do OAuth 认证，支持设备类型自动分类和分类排行榜。
 
-## 📋 功能特性
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3.5.25-42b883?logo=vue.js)](https://vuejs.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479a1?logo=mysql)](https://www.mysql.com/)
 
-- ✨ **结果解析**: 自动解析基准测试结果文本
-- 📝 **数据确认**: 结构化显示解析结果，支持用户修改
-- 🔐 **OAuth 认证**: 集成 Linux.do OAuth 登录
-- 📊 **排行榜**: 实时基准测试排名展示
-- 👥 **用户管理**: 用户注册和信息管理
-- 🎨 **美观界面**: 现代化的响应式设计
-- 📱 **移动适配**: 支持移动端访问
+## ✨ 功能特性
 
-## 🛠️ 技术栈
+- 🔐 **OAuth 认证**: 集成 linux.do 一键登录
+- 📊 **智能解析**: 自动解析基准测试结果文本
+- 🎯 **设备分类**: AI 自动识别服务器级/消费级设备
+- 🏆 **分类排行榜**: 按设备类型独立排名
+- 👤 **用户管理**: 每用户最多 3 条记录
+- 📱 **响应式设计**: 支持桌面和移动端
+- 🐳 **容器化部署**: 一键 Docker 部署
 
-- **前端**: Vue 3 (Composition API) + Vite + Vue Router
-- **后端**: FastAPI + Uvicorn
-- **数据库**: MySQL 8.0
-- **认证**: OAuth2 (Linux.do)
-- **容器化**: Docker
+## 🎯 在线演示
+
+- **生产环境**: https://benchmark.zhile.in
+- **API 文档**: https://benchmark.zhile.in/docs
 
 ## 🚀 快速开始
 
-### 本地开发
+### 方法一：Docker 部署（推荐）
 
-1. **克隆项目**
 ```bash
-git clone <repository-url>
-cd benchmark-platform
+# 1. 拉取镜像
+docker pull zhuxindong/benchmark-platform:latest
+
+# 2. 运行容器
+docker run -d \
+  -p 3100:3000 \
+  -p 8000:8000 \
+  --name benchmark-platform \
+  -e DATABASE_URL="mysql://用户名:密码@数据库地址:3306/数据库名" \
+  -e OAUTH_CLIENT_ID="你的OAuth客户端ID" \
+  -e OAUTH_CLIENT_SECRET="你的OAuth客户端密钥" \
+  -e OAUTH_CALLBACK_URL="http://你的域名/api/v1/auth/linuxdo/callback" \
+  -e SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+  zhuxindong/benchmark-platform:latest
+
+# 3. 访问应用
+# 前端: http://localhost:3100
+# API: http://localhost:8000/docs
 ```
 
-2. **后端启动**
+### 方法二：本地开发
+
+#### 前置要求
+- Node.js 16+ 和 pnpm
+- Python 3.11+
+- MySQL 8.0+
+
+#### 启动后端
 ```bash
 cd backend
-python app_main.py
+pip install -r requirements.txt
+# 或使用 uv 虚拟环境
+uv run python app_main.py
 ```
 
-3. **前端启动**
+#### 启动前端
 ```bash
+pnpm install
 pnpm dev
 ```
 
 访问地址：
-- 前端页面: http://localhost:3000
+- 前端: http://localhost:3000
 - API 文档: http://localhost:8000/docs
-- API 服务: http://localhost:8000
-
-### Docker 部署
-
-#### 方法 1：使用预构建镜像
-
-```bash
-# 拉取镜像
-docker pull yourusername/benchmark-platform:latest
-
-# 运行容器
-docker run -d \
-  -p 3000:3000 \
-  -p 8000:8000 \
-  --name benchmark-platform \
-  -e DATABASE_URL="mysql://用户名:密码@数据库地址:3306/benchmark" \
-  -e OAUTH_CLIENT_ID="你的OAuth客户端ID" \
-  -e OAUTH_CLIENT_SECRET="你的OAuth客户端密钥" \
-  -e OAUTH_CALLBACK_URL="http://localhost:8000/api/v1/auth/linuxdo/callback" \
-  yourusername/benchmark-platform:latest
-```
-
-#### 方法 2：从源码构建
-
-```bash
-# 克隆项目
-git clone <repository-url>
-cd benchmark-platform
-
-# 构建镜像
-docker build -t benchmark-platform .
-
-# 运行容器
-docker run -d \
-  -p 3000:3000 \
-  -p 8000:8000 \
-  --name benchmark-platform \
-  -e DATABASE_URL="mysql://用户名:密码@数据库地址:3306/benchmark" \
-  -e OAUTH_CLIENT_ID="你的OAuth客户端ID" \
-  -e OAUTH_CLIENT_SECRET="你的OAuth客户端密钥" \
-  -e OAUTH_CALLBACK_URL="http://localhost:8000/api/v1/auth/linuxdo/callback" \
-  benchmark-platform
-```
+- 健康检查: http://localhost:8000/health
 
 ## ⚙️ 环境变量配置
 
-### 必需的环境变量
-
-| 变量名 | 描述 | 示例值 |
-|--------|------|--------|
-| `DATABASE_URL` | MySQL 数据库连接字符串 | `mysql://root:password@192.168.1.100:3306/benchmark` |
-| `OAUTH_CLIENT_ID` | Linux.do OAuth 客户端 ID | `xxx` |
-| `OAUTH_CLIENT_SECRET` | Linux.do OAuth 客户端密钥 | `xxx` |
-| `OAUTH_CALLBACK_URL` | OAuth 回调地址 | `http://localhost:8000/api/v1/auth/linuxdo/callback` |
-
-### 可选的环境变量
-
-| 变量名 | 描述 | 默认值 |
-|--------|------|--------|
-| `ALLOWED_ORIGINS` | CORS 允许的源（逗号分隔） | `*` |
-| `VITE_ALLOWED_HOSTS` | 前端开发服务器允许的主机（逗号分隔），设为 `all` 允许所有域名 | `all` |
-
-## 🐳 Docker 运行示例
-
-### 基本运行
+创建 `.env` 文件：
 
 ```bash
-docker run -d \
-  -p 3000:3000 \
-  -p 8000:8000 \
-  --name benchmark-platform \
-  -e DATABASE_URL="mysql://root:root@192.168.198.91:3306/benchmark" \
-  -e OAUTH_CLIENT_ID="xxx" \
-  -e OAUTH_CLIENT_SECRET="xxx" \
-  -e OAUTH_CALLBACK_URL="http://localhost:8000/api/v1/auth/linuxdo/callback" \
-  yourusername/benchmark-platform:latest
+# 数据库配置
+DATABASE_URL=mysql://root:password@localhost:3306/benchmark
+
+# OAuth 配置（在 linux.do 申请）
+OAUTH_CLIENT_ID=你的客户端ID
+OAUTH_CLIENT_SECRET=你的客户端密钥
+OAUTH_CALLBACK_URL=http://localhost:8000/api/v1/auth/linuxdo/callback
+
+# 前端 URL（开发环境）
+FRONTEND_URL=http://localhost:3000
+
+# JWT 密钥（生成强随机密钥）
+SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+
+# CORS 配置
+ALLOWED_ORIGINS=*  # 生产环境请设置具体域名
 ```
 
-### 生产环境运行
+### 如何申请 linux.do OAuth
 
-```bash
-docker run -d \
-  -p 3000:3000 \
-  -p 8000:8000 \
-  --name benchmark-platform \
-  --restart unless-stopped \
-  -e DATABASE_URL="mysql://prod_user:strong_password@db.example.com:3306/benchmark" \
-  -e OAUTH_CLIENT_ID="your_prod_oauth_id" \
-  -e OAUTH_CLIENT_SECRET="your_prod_oauth_secret" \
-  -e OAUTH_CALLBACK_URL="https://yourdomain.com/api/v1/auth/linuxdo/callback" \
-  -e ALLOWED_ORIGINS="https://yourdomain.com,https://www.yourdomain.com" \
-  yourusername/benchmark-platform:latest
-```
-
-### Docker Compose 部署
-
-创建 `docker-compose.yml` 文件：
-
-```yaml
-version: '3.8'
-
-services:
-  benchmark-platform:
-    image: yourusername/benchmark-platform:latest
-    ports:
-      - "3000:3000"
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=mysql://root:password@mysql:3306/benchmark
-      - OAUTH_CLIENT_ID=your_oauth_client_id
-      - OAUTH_CLIENT_SECRET=your_oauth_client_secret
-      - OAUTH_CALLBACK_URL=http://localhost:8000/api/v1/auth/linuxdo/callback
-    depends_on:
-      - mysql
-    networks:
-      - app-network
-
-  mysql:
-    image: mysql:8.0
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=benchmark
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - app-network
-
-networks:
-  app-network:
-
-volumes:
-  mysql_data:
-```
-
-运行：
-
-```bash
-docker-compose up -d
-```
+1. 访问 https://connect.linux.do
+2. 创建新的 OAuth 应用
+3. 设置回调 URL
+4. 获取 Client ID 和 Client Secret
 
 ## 📖 使用说明
 
-### 1. 解析基准测试结果
+### 1. 提交基准测试结果
 
-在首页的大文本框中粘贴您的基准测试结果，格式如下：
+在首页粘贴您的基准测试结果：
 
 ```
 === System Information ===
@@ -199,145 +115,224 @@ docker-compose up -d
   Memory          : 7.8 GB
 
 [Phase 1] HMAC brute-force started
-[Phase 1] Summary
-  KEY_BITS        : 28 (key_space = 2^28 = 268435456)
-  workers         : 16
   wall_time       : 64.642 s
-  throughput      : 4,152,645 keys/s
-  true_key_int    : 199716959 (0xBE7705F)
-  success         : True
-[Phase 1] finished in 64.643 s
 
-[Phase 2] LLL float benchmark (short vector recovery) started
-[Phase 2] Summary
-  DIM_LLL         : 180
-  workers         : 16
-  reps_per_worker : 1
-  total_attacks   : 16
-  total_success   : 16
+[Phase 2] LLL float benchmark
   wall_time       : 71.761 s
-  avg_attack_time : 71.099638 s
-  all_success     : True
-[Phase 2] finished in 71.762 s
 
 [Overall] total wall_time: 136.405 s
 ```
 
-### 2. 确认结构化数据
+### 2. 自动设备分类
 
-系统会自动解析以下信息：
+系统会自动识别设备类型：
+- 🖥️ **服务器级**: Intel Xeon, AMD EPYC 等
+- 💻 **消费级**: Intel Core i5/i7/i9, AMD Ryzen 等
 
-- **系统信息**: CPU 型号、核心数、内存大小
-- **Phase 1**: HMAC 暴力破解耗时
-- **Phase 2**: LLL 浮点基准测试耗时
-- **总体信息**: 总执行时间
+置信度评分：
+- 高置信度 (>0.7): 自动分类准确
+- 低置信度 (<0.7): 建议手动校正
 
-用户可以修改任何字段，确认无误后点击提交。
+### 3. 查看排行榜
+
+- **综合排行榜**: 所有设备混合排名
+- **服务器榜**: 仅服务器级 CPU
+- **消费级榜**: 仅消费级 CPU
 
 ## 📂 项目结构
 
 ```
 benchmark-platform/
-├── src/
-│   ├── views/
-│   │   ├── Home.vue              # 首页 - 解析器
-│   │   ├── ParseResult.vue       # 解析结果确认页
-│   │   ├── Leaderboard.vue       # 排行榜页面
-│   │   ├── BenchmarkDetail.vue  # 基准测试详情页
-│   │   └── Upload.vue            # 上传页面
-│   ├── App.vue                   # 主应用组件
-│   └── main.js                   # 应用入口
-├── backend/
-│   ├── app_main.py              # FastAPI 主应用
-│   ├── requirements.txt         # Python 依赖
-│   └── init.sql                  # 数据库初始化脚本
-├── Dockerfile                   # Docker 构建文件
-├── docker-compose.yml          # Docker Compose 配置
-├── index.html                   # HTML 模板
-├── vite.config.js              # Vite 配置
-└── package.json                # 项目配置
+├── src/                      # 前端源码 (Vue.js)
+│   ├── views/                # 页面组件
+│   ├── services/             # API 服务
+│   └── stores/               # 状态管理
+├── backend/                  # 后端源码 (FastAPI)
+│   ├── app/                  # 应用模块
+│   │   ├── routes/           # 路由模块 ✨
+│   │   ├── dependencies/     # 依赖注入 ✨
+│   │   ├── config.py         # 配置管理 ✨
+│   │   └── utils/            # 工具函数
+│   ├── app_main.py           # 主入口 (120行) ✨
+│   └── init.sql              # 数据库初始化
+├── Dockerfile                # Docker 构建配置
+├── docker-compose.yml        # Docker Compose 配置
+└── README.md                 # 本文档
+
+✨ = v6.0 重构新增/优化
 ```
 
-## 🎨 界面特色
+## 🔧 开发文档
 
-- **渐变背景**: 紫色渐变营造科技感
-- **毛玻璃效果**: 半透明卡片设计
-- **响应式布局**: 适配桌面和移动端
-- **平滑动画**: 按钮和输入框的交互动效
+详细的开发文档请参考：
+- **开发指南**: [CLAUDE.md](./CLAUDE.md)
+- **后端文档**: [backend/README.md](./backend/README.md)
+- **JWT 安全修复**: [JWT_SECURITY_FIX.md](./JWT_SECURITY_FIX.md)
+- **重构报告**: [REFACTORING_REPORT.md](./REFACTORING_REPORT.md)
 
-## 🔧 开发说明
+## 🐳 生产环境部署
 
-### 构建生产版本
+### Docker Compose（推荐）
 
+创建 `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  app:
+    image: zhuxindong/benchmark-platform:latest
+    ports:
+      - "3100:3000"
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql://root:password@mysql:3306/benchmark
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
+      - OAUTH_CALLBACK_URL=https://yourdomain.com/api/v1/auth/linuxdo/callback
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_ORIGINS=https://yourdomain.com
+    restart: unless-stopped
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=benchmark
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+```
+
+启动：
 ```bash
-pnpm build
+docker-compose up -d
 ```
 
-### 数据库初始化
+### 生产环境清单
 
-容器启动时会自动检查数据库表是否存在，如果不存在会自动创建表结构。
+- [ ] 使用 HTTPS（配置 SSL 证书）
+- [ ] 设置强随机 SECRET_KEY
+- [ ] 限制 CORS 为具体域名
+- [ ] 配置数据库连接池
+- [ ] 设置定期数据库备份
+- [ ] 配置日志收集和监控
+- [ ] 启用 Cookie secure 属性
 
-### 日志查看
+## 🛡️ 安全说明
 
-```bash
-# 查看容器日志
-docker logs benchmark-platform
+### 生产环境必须配置
 
-# 实时查看日志
-docker logs -f benchmark-platform
-```
+1. **强密钥**
+   ```bash
+   SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+   ```
+
+2. **HTTPS**
+   - 使用反向代理（Nginx/Caddy）配置 SSL
+   - Cookie secure 属性设为 True
+
+3. **CORS 限制**
+   ```env
+   ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+   ```
+
+4. **数据库安全**
+   - 使用强密码
+   - 限制访问 IP
+   - 定期备份
+
+## 📊 API 端点
+
+### 认证
+- `GET /api/v1/auth/login` - 获取 OAuth 登录 URL
+- `POST /api/v1/auth/linuxdo/callback` - OAuth 回调处理
+- `GET /api/v1/auth/me` - 获取当前用户信息
+
+### 基准测试
+- `POST /api/v1/benchmarks/parse` - 解析测试结果
+- `POST /api/v1/benchmarks/submit` - 提交测试结果
+- `GET /api/v1/benchmarks/leaderboard` - 获取排行榜
+- `GET /api/v1/benchmarks/my-result` - 获取我的记录
+- `GET /api/v1/benchmarks/my-ranks` - 获取我的排名
+
+完整 API 文档: http://localhost:8000/docs
 
 ## 🐛 故障排除
 
 ### 常见问题
 
 1. **数据库连接失败**
-   - 检查 DATABASE_URL 格式是否正确
-   - 确认数据库服务器是否可访问
-   - 验证用户名和密码是否正确
+   ```bash
+   # 检查数据库连接
+   curl http://localhost:8000/health
+   ```
 
 2. **OAuth 认证失败**
-   - 检查 OAUTH_CLIENT_ID 和 OAUTH_CLIENT_SECRET
-   - 确认 OAUTH_CALLBACK_URL 与在 Linux.do 注册的回调地址一致
+   - 确认回调 URL 完全匹配
+   - 检查 Client ID 和 Secret
+   - 查看后端日志
 
 3. **前端无法访问**
-   - 确认 3000 端口没有被占用
-   - 检查防火墙设置
+   - 检查端口占用
+   - 确认 CORS 配置
+   - 查看浏览器控制台
 
 ### 调试命令
 
 ```bash
+# 查看容器日志
+docker logs -f benchmark-platform
+
 # 进入容器调试
 docker exec -it benchmark-platform /bin/bash
 
 # 检查服务状态
 docker ps
-
-# 查看容器资源使用
-docker stats benchmark-platform
+curl http://localhost:8000/health
 ```
 
-## 🔄 API 文档
+## 📝 版本历史
 
-部署成功后，可以通过以下地址访问：
+### v6.0 (2025-12-14) ✨
+- JWT 安全升级（python-jose + HMAC-SHA256）
+- 模块化重构（app_main.py: 1336 → 120 行）
+- Cookie-based 认证
+- 新增路由模块、依赖注入、配置管理
 
-- **前端页面**: http://localhost:3000
-- **API 文档**: http://localhost:8000/docs
-- **API 服务**: http://localhost:8000
+### v5.0 (2025-12-05)
+- 用户排名查询功能
+- 多记录管理
+- 设备类型分类
 
-## 🐳 推送到 Docker Hub
+## 🤝 贡献指南
 
-```bash
-# 1. 先登录 Docker Hub
-docker login
+欢迎贡献代码！请先阅读：
+- [开发文档](./CLAUDE.md)
+- [后端文档](./backend/README.md)
 
-# 2. 给镜像打标签（替换 yourusername 为你的 Docker Hub 用户名）
-docker tag benchmark-platform yourusername/benchmark-platform:latest
+提交 Pull Request 前请确保：
+- 代码通过 lint 检查
+- 添加必要的测试
+- 更新相关文档
 
-# 3. 推送镜像
-docker push yourusername/benchmark-platform:latest
-```
+## 📄 许可证
 
-## 📝 许可证
+MIT License
 
-[请添加许可证信息]
+## 🙏 致谢
+
+- [FastAPI](https://fastapi.tiangolo.com/) - 现代化的 Python Web 框架
+- [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
+- [linux.do](https://linux.do) - OAuth 认证支持
+
+---
+
+**最后更新**: 2025-12-14
+**当前版本**: v6.0
+**维护者**: Claude Code Development Team
