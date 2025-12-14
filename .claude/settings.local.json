@@ -40,7 +40,9 @@
       "Bash(Get-Process:*)",
       "Bash(Where-Object {$_ProcessName -eq \"python\"})",
       "Bash(Stop-Process -Force)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(uv run:*)",
+      "Bash(copy:*)"
     ],
     "deny": [],
     "ask": []

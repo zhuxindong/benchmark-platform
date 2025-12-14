@@ -18,11 +18,10 @@ RUN apt-get update && apt-get install -y \
 
 # 复制requirements文件
 COPY backend/requirements.txt .
-COPY backend/requirements-minimal.txt .
 
 # 配置pip国内源并安装Python依赖
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip install --no-cache-dir -r requirements-minimal.txt && \
+    pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir \
     pymysql==1.1.0 \
     sqlalchemy==2.0.23 \

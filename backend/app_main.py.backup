@@ -1,0 +1,1317 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+基准测试评分平台 - 集成OAuth认证的主应用
+"""
+
+from fastapi import FastAPI, HTTPException, status, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel
+from typing import Dict, Optional
+import httpx
+from urllib.parse import urlencode
+import secrets
+import pymysql
+import json
+from datetime import datetime, timedelta, timezone
+import os
+from jose import jwt, JWTError
+from dotenv import load_dotenv
+from app.utils.device_classifier import DeviceTypeClassifier
+from app.core.config import settings
+
+# 加载环境变量
+load_dotenv()
+
+# CORS配�� - 从环境变量读取或使用默认值
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",") if os.getenv("ALLOWED_ORIGINS") else [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://localhost:8001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:8001",
+    # 生产环境请通过环境变量设置您的实际域名，例如：
+    # "https://yourdomain.com",
+    # "https://www.yourdomain.com",
+    # "https://benchmark.yourdomain.com",
+    "*"  # 开发环境允许所有来源，生产环境请移除
+]
+
+app = FastAPI(
+    title="基准测试评分平台",
+    description="集成 linux.do OAuth 认证的基准测试平台",
+    version="3.0.0"
+)
+
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# 数据模型
+class BenchmarkSubmitRequest(BaseModel):
+    cpu_model: str
+    cpu_cores: int
+    memory_gb: float
+    phase1_wall_time: float
+    phase2_wall_time: float
+    overall_wall_time: float
+    device_type: Optional[str] = None
+    device_type_confidence: Optional[float] = None
+
+# OAuth 配置 - 从环境变量读取
+CLIENT_ID = os.getenv("OAUTH_CLIENT_ID")
+CLIENT_SECRET = os.getenv("OAUTH_CLIENT_SECRET")
+REDIRECT_URI = os.getenv("OAUTH_CALLBACK_URL", "http://localhost:8000/api/v1/auth/linuxdo/callback")
+
+# 获取前端URL
+def get_frontend_url():
+    """获取前端URL"""
+    # 优先使用环境变量中的FRONTEND_URL（用于开发环境前后端端口不同的情况）
+    frontend_url = os.getenv("FRONTEND_URL")
+    if frontend_url:
+        return frontend_url.rstrip('/')
+
+    # 否则从OAUTH_CALLBACK_URL中提取域名（用于生产环境前后端同域的情况）
+    callback_url = REDIRECT_URI
+    if callback_url:
+        from urllib.parse import urlparse
+        parsed = urlparse(callback_url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    # 兜底默认值
+    return "http://localhost:3000"
+AUTHORIZATION_ENDPOINT = os.getenv("OAUTH_AUTHORIZATION_ENDPOINT", "https://connect.linux.do/oauth2/authorize")
+TOKEN_ENDPOINT = os.getenv("OAUTH_TOKEN_ENDPOINT", "https://connect.linux.do/oauth2/token")
+USER_ENDPOINT = os.getenv("OAUTH_USER_ENDPOINT", "https://connect.linux.do/api/user")
+
+# 数据库配置 - 从环境变量读取
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    # 解析 DATABASE_URL 格式: mysql://user:password@host:port/database
+    import re
+    pattern = r'mysql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)'
+    match = re.match(pattern, DATABASE_URL)
+    if match:
+        DB_CONFIG = {
+            'host': match.group(3),
+            'port': int(match.group(4)),
+            'user': match.group(1),
+            'password': match.group(2),
+            'database': match.group(5),
+            'charset': 'utf8mb4'
+        }
+        print(f"DATABASE_URL解析成功")
+    else:
+        print("DATABASE_URL格式错误")
+        raise ValueError("Invalid DATABASE_URL format")
+else:
+    # 从单独的环境变量读取
+    DB_CONFIG = {
+        'host': os.getenv("DB_HOST", "127.0.0.1"),
+        'port': int(os.getenv("DB_PORT", "3306")),
+        'user': os.getenv("DB_USER", "root"),
+        'password': os.getenv("DB_PASSWORD", ""),
+        'database': os.getenv("DB_NAME", "benchmark_platform"),
+        'charset': 'utf8mb4'
+    }
+
+# CORS配置
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
+# JWT配置
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+ALGORITHM = "HS256"
+
+class CallbackRequest(BaseModel):
+    code: str
+    state: Optional[str] = None
+
+class LoginResponse(BaseModel):
+    authorization_url: str
+    state: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    user_id: str
+    email: Optional[str] = None
+    avatar_url: Optional[str] = None
+    created_at: str
+
+
+def check_database_exists():
+    """检查数据库和表是否存在，如果不存在则初始化"""
+    try:
+        # 使用解析的数据库配置连接到MySQL服务器
+        temp_config = DB_CONFIG.copy()
+        database_name = temp_config.pop('database', None)
+
+        conn = pymysql.connect(**temp_config)
+        cursor = conn.cursor()
+
+        # 创建数据库（如果不存在）
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{database_name}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        cursor.execute(f"USE `{database_name}`")
+
+        # 检查users表是否存在
+        cursor.execute("SHOW TABLES LIKE 'users'")
+        users_exists = cursor.fetchone()
+
+        if not users_exists:
+            print("数据库表不存在，开始初始化...")
+            # 读取并执行初始化脚本
+            init_script_path = os.path.join(os.path.dirname(__file__), 'init.sql')
+            if os.path.exists(init_script_path):
+                with open(init_script_path, 'r', encoding='utf-8') as f:
+                    init_sql = f.read()
+                    # 移除创建数据库的语句，因为已经创建了
+                    init_sql = re.sub(r'CREATE DATABASE.*?;', '', init_sql, flags=re.MULTILINE | re.DOTALL)
+                    # 移除USE语句
+                    init_sql = re.sub(r'USE `[^`]+`;', '', init_sql, flags=re.MULTILINE)
+
+                    # 分割并执行SQL语句
+                    statements = [s.strip() for s in init_sql.split(';') if s.strip()]
+                    for statement in statements:
+                        if statement:
+                            cursor.execute(statement)
+                print("数据库初始化完成")
+            else:
+                print("警告: init.sql文件不存在，跳过数据库初始化")
+        else:
+            print("数据库表已存在")
+
+        cursor.close()
+        conn.close()
+
+    except Exception as e:
+        print(f"数据库检查/初始化失败: {e}")
+        raise
+
+def get_db():
+    """获取数据库连接"""
+    try:
+        conn = pymysql.connect(**DB_CONFIG)
+        return conn
+
+    except Exception as e:
+        print(f"数据库连接失败: {e}")
+        raise
+
+def create_jwt_token(data: dict) -> str:
+    """创建标准JWT令牌"""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    to_encode.update({"exp": expire})
+
+    # 使用python-jose创建标准JWT token
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str) -> Optional[dict]:
+    """验证JWT令牌"""
+    try:
+        # 使用python-jose解码和验证JWT token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError as e:
+        print(f"DEBUG: JWT验证失败: {e}")
+        return None
+    except Exception as e:
+        print(f"DEBUG: Token验证异常: {e}")
+        return None
+
+def get_current_user_from_token(request: Request):
+    """从请求中获取当前用户"""
+    # 首先尝试从cookie获取token
+    token = request.cookies.get("auth_token")
+
+    if not token:
+        # 如果cookie中没有，尝试从Authorization header获取（向后兼容）
+        authorization = request.headers.get("authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.split(" ")[1]
+
+    # print(f" 获取到的token: {token[:50] if token else 'None'}...")
+
+    if not token:
+        print("DEBUG: 缺少认证令牌")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="缺少认证令牌"
+        )
+
+    payload = verify_token(token)
+
+    if not payload:
+        print("DEBUG: token验证失败")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的认证令牌"
+        )
+    # print(f" token验证成功，payload: {payload}")
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="令牌中缺少用户信息"
+        )
+
+    # 从数据库获取用户信息
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        cursor.close()
+        db.close()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户不存在"
+            )
+
+        return user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"数据库错误: {str(e)}"
+        )
+
+# 路由
+@app.get("/")
+async def root():
+    return {
+        "message": "基准���试评分平台",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "auth": "/api/v1/auth/login"
+    }
+
+@app.get("/health")
+async def health_check():
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("SELECT 1 as test")
+        result = cursor.fetchone()
+        cursor.close()
+        db.close()
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "oauth_configured": bool(CLIENT_ID and CLIENT_SECRET)
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
+
+# 认证路由
+@app.get("/api/v1/auth/login", response_model=LoginResponse)
+async def login():
+    """获取登录URL"""
+    if not CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth 未配置"
+        )
+
+    state = "benchmark_" + secrets.token_urlsafe(16)
+
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "scope": "read",
+        "state": state
+    }
+
+    auth_url = AUTHORIZATION_ENDPOINT
+    authorization_url = f"{auth_url}?{urlencode(params)}"
+
+    return LoginResponse(
+        authorization_url=authorization_url,
+        state=state
+    )
+
+@app.post("/api/v1/auth/linuxdo/callback")
+async def linuxdo_callback_post(request: CallbackRequest):
+    """处理OAuth回调 - POST方法"""
+    return await _process_oauth_callback(request.code)
+
+@app.get("/api/v1/auth/linuxdo/callback")
+async def linuxdo_callback_get(code: str, state: str = None):
+    """处理OAuth回调 - GET方法"""
+    return await _process_oauth_callback(code)
+
+
+async def _process_oauth_callback(code: str):
+    """处理OAuth回调的通用逻辑"""
+    try:
+        # 交换访问令牌
+        token_url = TOKEN_ENDPOINT
+        data = {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": REDIRECT_URI
+        }
+
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(token_url, data=data, headers=headers)
+            response.raise_for_status()
+            token_data = response.json()
+
+        # 获取用户信息
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="未获取到访问令牌"
+            )
+
+        user_info_url = USER_ENDPOINT
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "Benchmark-Platform/1.0"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(user_info_url, headers=headers)
+            response.raise_for_status()
+            user_data = response.json()
+
+        # linux.do API 直接返回用户信息，不需要嵌套在"user"字段中
+        user = user_data
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="无法获取用户信息"
+            )
+
+        # 查找或创建用户
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("SELECT * FROM users WHERE user_id = %s OR username = %s",
+                      (str(user.get("id")), user.get("username")))
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            # 更新现有用户
+            cursor.execute("""
+                UPDATE users SET
+                    username = %s, email = %s, avatar_url = %s, updated_at = %s
+                WHERE id = %s
+            """, (
+                user.get("username"),
+                user.get("email"),
+                user.get("avatar_template", "").replace("{size}", "120"),
+                datetime.now(timezone.utc),
+                existing_user["id"]
+            ))
+            user_id = existing_user["id"]
+        else:
+            # 创建新用户
+            cursor.execute("""
+                INSERT INTO users (username, user_id, email, avatar_url, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                user.get("username"),
+                str(user.get("id")),
+                user.get("email"),
+                user.get("avatar_template", "").replace("{size}", "120"),
+                datetime.now(timezone.utc),
+                datetime.now(timezone.utc)
+            ))
+            user_id = cursor.lastrowid
+
+        # 获取用户信息
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user_record = cursor.fetchone()
+
+        db.commit()
+        cursor.close()
+        db.close()
+
+        # 创建JWT令牌 - 确保只包含基本字段，避免datetime对象
+        token_data = {
+            "user_id": int(user_record["id"]),
+            "username": str(user_record["username"]),
+            "user_do_id": str(user_record["user_id"])
+        }
+        access_token = create_jwt_token(token_data)
+
+        # 重定向到前端OAuth回调页面，设置cookie传递用户信息
+        frontend_url = f"{get_frontend_url().rstrip('/')}/oauth/callback"
+        redirect_params = f"?success=true&username={user_record['username']}&user_id={user_record['id']}&user_do_id={user_record['user_id']}&avatar_url={user_record.get('avatar_url', '')}&email={user_record.get('email', '')}"
+
+        response = RedirectResponse(url=f"{frontend_url}{redirect_params}", status_code=302)
+        # 设置cookie
+        response.set_cookie(
+            key="auth_token",
+            value=access_token,
+            max_age=24*60*60,  # 24小时
+            expires=datetime.now(timezone.utc) + timedelta(hours=24),
+            path="/",
+            domain=None,
+            secure=False,  # 开发环境设为False，生产环境应为True
+            httponly=True,  # 防止XSS攻击
+            samesite="lax"
+        )
+        return response
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"OAuth认证失败: {e.response.text}"
+        )
+    except Exception as e:
+        # 添加调试信息
+        import traceback
+        error_detail = f"认证处理失败: {str(e)}\n详细错误: {traceback.format_exc()}"
+        print(error_detail)  # 在控制台打印完整错误信息
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"认证处理失败: {str(e)}"
+        )
+
+@app.get("/api/v1/auth/me")
+async def get_current_user_info(current_user = Depends(get_current_user_from_token)):
+    """获取当前用户信息"""
+    return {
+        "id": current_user["id"],
+        "username": current_user["username"],
+        "user_id": current_user["user_id"],
+        "email": current_user["email"],
+        "avatar_url": current_user["avatar_url"],
+        "created_at": current_user["created_at"].isoformat() if current_user["created_at"] else None
+    }
+
+@app.post("/api/v1/auth/logout")
+async def logout():
+    """登出"""
+    response = JSONResponse(content={"success": True, "message": "登出成功"})
+    response.delete_cookie(
+        key="auth_token",
+        path="/",
+        samesite="lax"
+    )
+    return response
+
+# Mock登录端点（仅用于本地测试）
+class MockLoginRequest(BaseModel):
+    username: str
+    email: Optional[str] = None
+
+@app.post("/api/v1/auth/mock-login")
+async def mock_login(request: MockLoginRequest):
+    """Mock登录 - 仅用于本地测试，无需OAuth服务"""
+    # 检查是否启用Mock登录
+    if not settings.ENABLE_MOCK_LOGIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Mock登录功能已禁用。此功能仅用于开发环境，生产环境不可用。"
+        )
+    
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+        
+        # 查找或创建Mock用户
+        cursor.execute("SELECT * FROM users WHERE username = %s", (request.username,))
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            # 更新现有用户
+            cursor.execute("""
+                UPDATE users SET
+                    email = %s, updated_at = %s
+                WHERE id = %s
+            """, (
+                request.email or existing_user["email"],
+                datetime.now(timezone.utc),
+                existing_user["id"]
+            ))
+            user_id = existing_user["id"]
+        else:
+            # 创建新Mock用户
+            mock_user_id = f"mock_{secrets.token_urlsafe(8)}"
+            cursor.execute("""
+                INSERT INTO users (username, user_id, email, avatar_url, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                request.username,
+                mock_user_id,
+                request.email,
+                f"https://ui-avatars.com/api/?name={request.username}&background=667eea&color=fff",
+                datetime.now(timezone.utc),
+                datetime.now(timezone.utc)
+            ))
+            user_id = cursor.lastrowid
+        
+        # 获取用户信息
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user_record = cursor.fetchone()
+        
+        db.commit()
+        cursor.close()
+        db.close()
+        
+        # 创建JWT令牌
+        token_data = {
+            "user_id": int(user_record["id"]),
+            "username": str(user_record["username"]),
+            "user_do_id": str(user_record["user_id"])
+        }
+        access_token = create_jwt_token(token_data)
+        
+        # 返回响应并设置cookie
+        response = JSONResponse(content={
+            "success": True,
+            "message": "Mock登录成功",
+            "user": {
+                "id": user_record["id"],
+                "username": user_record["username"],
+                "user_id": user_record["user_id"],
+                "email": user_record.get("email"),
+                "avatar_url": user_record.get("avatar_url")
+            }
+        })
+        
+        # 设置cookie
+        response.set_cookie(
+            key="auth_token",
+            value=access_token,
+            max_age=24*60*60,  # 24小时
+            expires=datetime.now(timezone.utc) + timedelta(hours=24),
+            path="/",
+            domain=None,
+            secure=False,  # 开发环境设为False
+            httponly=True,  # 防止XSS攻击
+            samesite="lax"
+        )
+        
+        return response
+        
+    except Exception as e:
+        import traceback
+        error_detail = f"Mock登录失败: {str(e)}\n详细错误: {traceback.format_exc()}"
+        print(error_detail)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Mock登录失败: {str(e)}"
+        )
+
+# 基准测试相关路由
+@app.post("/api/v1/benchmarks/parse")
+async def parse_benchmark_text(request: Request):
+    """解析基准测试文本"""
+    try:
+        body = await request.json()
+        text = body.get("text", "")
+
+        if not text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="缺少基准测试结果文本"
+            )
+
+        # 简化的解析逻辑
+        import re
+
+        parsed_data = {
+            "cpu_model": "",
+            "cpu_cores": None,
+            "memory_gb": None,
+            "phase1_wall_time": None,
+            "phase2_wall_time": None,
+            "overall_wall_time": None
+        }
+
+        # 解析系统信息
+        cpu_match = re.search(r'CPU\s*[:\s]\s*(.+?)(?:\n|$)', text, re.IGNORECASE)
+        if cpu_match:
+            parsed_data["cpu_model"] = cpu_match.group(1).strip()
+
+        cores_match = re.search(r'(?:Cores|cores?|Cores?_logical)\s*[:\s]\s*(\d+)', text, re.IGNORECASE)
+        if cores_match:
+            parsed_data["cpu_cores"] = int(cores_match.group(1))
+
+        memory_match = re.search(r'Memory\s*[:\s]\s*([\d.]+)\s*(?:GB|gb|GiB|gib)', text, re.IGNORECASE)
+        if memory_match:
+            parsed_data["memory_gb"] = float(memory_match.group(1))
+
+        # 解析时间信息
+        phase1_match = re.search(r'\[Phase\s*1\][\s\S]*?wall_time\s*[:\s]\s*([\d.]+)\s*s', text, re.IGNORECASE)
+        if phase1_match:
+            parsed_data["phase1_wall_time"] = float(phase1_match.group(1))
+
+        phase2_match = re.search(r'\[Phase\s*2\][\s\S]*?wall_time\s*[:\s]\s*([\d.]+)\s*s', text, re.IGNORECASE)
+        if phase2_match:
+            parsed_data["phase2_wall_time"] = float(phase2_match.group(1))
+
+        total_match = re.search(r'\[Overall\][\s\S]*?wall_time\s*[:\s]\s*([\d.]+)\s*s', text, re.IGNORECASE)
+        if total_match:
+            parsed_data["overall_wall_time"] = float(total_match.group(1))
+
+        return {
+            "success": True,
+            "data": parsed_data,
+            "message": "解析成功"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"解析失败: {str(e)}"
+        )
+
+@app.get("/api/v1/auth/verify-token")
+async def verify_token_endpoint(request: Request):
+    """验证令牌"""
+    try:
+        authorization = request.headers.get("authorization")
+        if not authorization or not authorization.startswith("Bearer "):
+            return {"valid": False, "message": "缺少认证令牌"}
+
+        token = authorization.split(" ")[1]
+        payload = verify_token(token)
+
+        if not payload:
+            return {"valid": False, "message": "无效令牌"}
+
+        return {
+            "valid": True,
+            "message": "令牌有效",
+            "user": {
+                "id": payload.get("user_id"),
+                "username": payload.get("username")
+            }
+        }
+
+    except Exception as e:
+        return {"valid": False, "message": f"验证失败: {str(e)}"}
+
+# 基准测试结果管理API
+@app.get("/api/v1/benchmarks/leaderboard")
+async def get_leaderboard(device_type: Optional[str] = None, limit: int = 20, page: int = 1, reverse: bool = False):
+    """获取排行榜数据（reverse=True 显示最慢的设备）"""
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
+        # 计算偏移量
+        offset = (page - 1) * limit
+
+        # 构建WHERE条件 - 由于所���数据都未验证，暂时去掉验证条件
+        where_conditions = ["br.overall_wall_time IS NOT NULL"]
+        params = []
+
+        if device_type:
+            where_conditions.append("br.device_type = %s")
+            params.append(device_type)
+
+        where_clause = " AND ".join(where_conditions)
+        
+        # 根据 reverse 参数决定排序方向
+        order_direction = "DESC" if reverse else "ASC"
+
+        # 获取排行榜数据，按总耗时排序
+        cursor.execute(f"""
+            SELECT br.*, u.username, u.avatar_url
+            FROM benchmark_results br
+            JOIN users u ON br.user_id = u.id
+            WHERE {where_clause}
+            ORDER BY br.overall_wall_time {order_direction}
+            LIMIT %s OFFSET %s
+        """, params + [limit, offset])
+
+        results = cursor.fetchall()
+
+        # 格式化数据
+        leaderboard = []
+        rank = offset + 1
+        for result in results:
+            leaderboard.append({
+                "rank": rank,
+                "username": result["username"],
+                "avatar_url": result["avatar_url"],
+                "cpu_model": result["cpu_model"],
+                "cpu_cores": result["cpu_cores"],
+                "memory_gb": float(result["memory_gb"]) if result["memory_gb"] else None,
+                "phase1_wall_time": float(result["phase1_wall_time"]) if result["phase1_wall_time"] else None,
+                "phase2_wall_time": float(result["phase2_wall_time"]) if result["phase2_wall_time"] else None,
+                "overall_wall_time": float(result["overall_wall_time"]) if result["overall_wall_time"] else None,
+                "device_type": result.get("device_type", "unknown"),
+                "device_type_confidence": float(result["device_type_confidence"]) if result.get("device_type_confidence") else 0.0,
+                "submitted_at": result["submitted_at"].isoformat() if result["submitted_at"] else None
+            })
+            rank += 1
+
+        # 获取总数 - 使用与主查询相同的表别名
+        count_params = params.copy() if params else []
+        cursor.execute(f"SELECT COUNT(*) as total FROM benchmark_results br WHERE {where_clause}", count_params)
+        total = cursor.fetchone()["total"]
+
+        cursor.close()
+        db.close()
+
+        return {
+            "success": True,
+            "data": {
+                "leaderboard": leaderboard,
+                "pagination": {
+                    "page": page,
+                    "limit": limit,
+                    "total": total,
+                    "total_pages": (total + limit - 1) // limit
+                }
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取排行榜失败: {str(e)}"
+        )
+
+@app.get("/api/v1/benchmarks/my-result")
+async def get_my_benchmark_result(current_user = Depends(get_current_user_from_token)):
+    """获取当前用户的基准测试结果（支持多条记录）"""
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
+        # 查找用户的所有基准测试结果
+        cursor.execute("""
+            SELECT br.*, u.username, u.avatar_url
+            FROM benchmark_results br
+            JOIN users u ON br.user_id = u.id
+            WHERE br.user_id = %s
+            ORDER BY br.submitted_at DESC
+        """, (current_user["id"],))
+
+        results = cursor.fetchall()
+
+        # 获取用户总记录数和剩余可提交次数
+        cursor.execute("SELECT COUNT(*) as total_count FROM benchmark_results WHERE user_id = %s", (current_user["id"],))
+        count_result = cursor.fetchone()
+        total_count = count_result["total_count"]
+        remaining_slots = max(0, 3 - total_count)
+
+        cursor.close()
+        db.close()
+
+        if not results:
+            return {
+                "success": True,
+                "data": {
+                    "results": [],
+                    "total_count": 0,
+                    "remaining_slots": 3
+                },
+                "message": "用户还没有上传基准测试结果"
+            }
+
+        # 格式化结果
+        formatted_results = []
+        for result in results:
+            formatted_results.append({
+                "id": result["id"],
+                "username": result["username"],
+                "avatar_url": result["avatar_url"],
+                "cpu_model": result["cpu_model"],
+                "cpu_cores": result["cpu_cores"],
+                "memory_gb": float(result["memory_gb"]) if result["memory_gb"] else None,
+                "phase1_wall_time": float(result["phase1_wall_time"]) if result["phase1_wall_time"] else None,
+                "phase2_wall_time": float(result["phase2_wall_time"]) if result["phase2_wall_time"] else None,
+                "overall_wall_time": float(result["overall_wall_time"]) if result["overall_wall_time"] else None,
+                "device_type": result.get("device_type", "unknown"),
+                "device_type_confidence": float(result["device_type_confidence"]) if result.get("device_type_confidence") else 0.0,
+                "submitted_at": result["submitted_at"].isoformat() if result["submitted_at"] else None,
+                "updated_at": result["updated_at"].isoformat() if result["updated_at"] else None
+            })
+
+        return {
+            "success": True,
+            "data": {
+                "results": formatted_results,
+                "total_count": total_count,
+                "remaining_slots": remaining_slots
+            },
+            "message": f"找到 {total_count} 条基准测试记录，还可提交 {remaining_slots} 条"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取用户基准测试结果失败: {str(e)}"
+        )
+
+@app.get("/api/v1/benchmarks/my-ranks")
+async def get_my_ranks(
+    device_type: Optional[str] = None,
+    reverse: bool = False,
+    current_user = Depends(get_current_user_from_token)
+):
+    """获取当前用户在排行榜中的所有排名信息"""
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+        
+        # 构建WHERE条件
+        where_conditions = ["br.overall_wall_time IS NOT NULL", "br.user_id = %s"]
+        params = [current_user["id"]]
+        
+        if device_type:
+            where_conditions.append("br.device_type = %s")
+            params.append(device_type)
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # 获取用户的所有记录
+        cursor.execute(f"""
+            SELECT br.*
+            FROM benchmark_results br
+            WHERE {where_clause}
+            ORDER BY br.overall_wall_time ASC
+        """, params)
+        
+        user_records = cursor.fetchall()
+        
+        if not user_records:
+            cursor.close()
+            db.close()
+            return {
+                "success": True,
+                "data": {"records": []},
+                "message": "用户没有符合条件的记录"
+            }
+        
+        # 为每条记录计算排名
+        records_with_ranks = []
+        for record in user_records:
+            # 构建排名查询的WHERE条件
+            rank_where_conditions = ["overall_wall_time IS NOT NULL"]
+            rank_params = []
+            
+            if device_type:
+                rank_where_conditions.append("device_type = %s")
+                rank_params.append(device_type)
+            
+            rank_where_clause = " AND ".join(rank_where_conditions)
+            
+            # 根据reverse参数决定排名计算方式
+            if reverse:
+                # 倒序：时间越长排名越高
+                cursor.execute(f"""
+                    SELECT COUNT(*) + 1 as `rank`
+                    FROM benchmark_results
+                    WHERE {rank_where_clause}
+                    AND overall_wall_time > %s
+                """, rank_params + [record["overall_wall_time"]])
+            else:
+                # 正序：时间越短排名越高
+                cursor.execute(f"""
+                    SELECT COUNT(*) + 1 as `rank`
+                    FROM benchmark_results
+                    WHERE {rank_where_clause}
+                    AND overall_wall_time < %s
+                """, rank_params + [record["overall_wall_time"]])
+            
+            rank_result = cursor.fetchone()
+            rank = rank_result["rank"]
+            
+            # 获取总数
+            cursor.execute(f"""
+                SELECT COUNT(*) as total
+                FROM benchmark_results
+                WHERE {rank_where_clause}
+            """, rank_params)
+            total_result = cursor.fetchone()
+            total = total_result["total"]
+            
+            # 计算所在页码（每页20条）
+            page = (rank - 1) // 20 + 1
+            
+            records_with_ranks.append({
+                "rank": rank,
+                "total": total,
+                "page": page,
+                "device_type": record.get("device_type", "unknown"),
+                "cpu_model": record["cpu_model"],
+                "overall_wall_time": float(record["overall_wall_time"]) if record["overall_wall_time"] else None,
+                "record_id": record["id"]
+            })
+        
+        cursor.close()
+        db.close()
+        
+        return {
+            "success": True,
+            "data": {"records": records_with_ranks}
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取用户排名失败: {str(e)}"
+        )
+
+@app.post("/api/v1/benchmarks/classify-device-type")
+async def classify_device_type(request: Dict[str, str]):
+    """设备类型分类API"""
+    try:
+        cpu_model = request.get("cpu_model", "").strip()
+        if not cpu_model:
+            return {
+                "success": False,
+                "message": "CPU型号不能为空"
+            }
+
+        # 使用设备类型分类器进行分类
+        classifier = DeviceTypeClassifier()
+        device_type, confidence = classifier.classify_cpu(cpu_model)
+
+        return {
+            "success": True,
+            "data": {
+                "cpu_model": cpu_model,
+                "device_type": device_type,
+                "device_type_confidence": confidence,
+                "classification_text": f"设备类型: {device_type.upper()} (置信度: {confidence:.2f})"
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"设备类型分类失败: {str(e)}"
+        )
+
+@app.post("/api/v1/benchmarks/submit")
+async def submit_benchmark_result(
+    request: BenchmarkSubmitRequest,
+    current_user = Depends(get_current_user_from_token)
+):
+    """提交基准测试结果"""
+    try:
+        db = get_db()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
+        # 检查用户已有结果数量
+        cursor.execute("SELECT COUNT(*) as count FROM benchmark_results WHERE user_id = %s", (current_user["id"],))
+        count_result = cursor.fetchone()
+        user_result_count = count_result["count"]
+
+        # 如果用户已经有3条记录，拒绝提交
+        if user_result_count >= 3:
+            cursor.close()
+            db.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="每个用户最多只能提交3条基准测试记录"
+            )
+
+        # 如果未提供设备类型，使用CPU型号进行分类
+        device_type = request.device_type
+        device_type_confidence = request.device_type_confidence
+
+        if not device_type:
+            classifier = DeviceTypeClassifier()
+            device_type, device_type_confidence = classifier.classify_cpu(request.cpu_model)
+
+        # 插入新结果（改为总是创建新记录）
+        cursor.execute("""
+            INSERT INTO benchmark_results
+            (user_id, username, cpu_model, cpu_cores, memory_gb, phase1_wall_time, phase2_wall_time, overall_wall_time, device_type, device_type_confidence)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            current_user["id"],
+            current_user["username"],
+            request.cpu_model,
+            request.cpu_cores,
+            request.memory_gb,
+            request.phase1_wall_time,
+            request.phase2_wall_time,
+            request.overall_wall_time,
+            device_type,
+            device_type_confidence
+        ))
+
+        result_id = cursor.lastrowid
+        action = "created"
+
+        db.commit()
+        cursor.close()
+        db.close()
+
+        return {
+            "success": True,
+            "message": f"基准测试结果{action}成功（这是您的第{user_result_count + 1}条记录）",
+            "data": {
+                "id": result_id,
+                "action": action,
+                "user_result_count": user_result_count + 1,
+                "remaining_slots": 3 - (user_result_count + 1)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"提交基准测试结果失败: {str(e)}"
+        )
+
+@app.delete("/api/v1/benchmarks/{benchmark_id}")
+async def delete_benchmark(benchmark_id: int, current_user: dict = Depends(get_current_user_from_token)):
+    """删除基准测试记录"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 获取用户ID - current_user已经是完整的数据库用户记录
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户身份验证失败"
+            )
+
+                
+        # 检查记录是否存在且属于当前用户
+        check_sql = "SELECT id, cpu_model, overall_wall_time, user_id FROM benchmark_results WHERE id = %s AND user_id = %s"
+        print(f"DEBUG: 执行删除检查SQL: {check_sql}")
+        print(f"DEBUG: SQL参数: benchmark_id={benchmark_id}, user_id={user_id}")
+        cursor.execute(check_sql, (benchmark_id, user_id))
+        record = cursor.fetchone()
+
+        print(f"DEBUG: 用户权限检查结果 - record={record}")
+
+        # 如果记录不存在，检查是否是权限问题
+        if not record:
+            print(f"DEBUG: 记录不存在或无权限，查询该记录的真实所有者...")
+            owner_check_sql = "SELECT id, user_id, cpu_model FROM benchmark_results WHERE id = %s"
+            print(f"DEBUG: 执行所有者查询: {owner_check_sql}")
+            cursor.execute(owner_check_sql, (benchmark_id,))
+            owner_record = cursor.fetchone()
+            print(f"DEBUG: 记录所有者信息 - owner_record={owner_record}")
+            if owner_record:
+                print(f"DEBUG: 记录ID {benchmark_id} 属于用户ID {owner_record['user_id']}，当前用户ID为 {user_id}")
+            else:
+                print(f"DEBUG: 记录ID {benchmark_id} 在数据库中根本不存在")
+
+        print(f"DEBUG: ===== DELETE API END =====")
+
+        if not record:
+            print(f"DEBUG: 权限检查失败，抛出404异常")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="记录不存在或无权限删除"
+            )
+
+        # 删除记录
+        cursor.execute("DELETE FROM benchmark_results WHERE id = %s AND user_id = %s", (benchmark_id, user_id))
+        conn.commit()
+
+        # 获取用户更新后的记录数量
+        cursor.execute("SELECT COUNT(*) FROM benchmark_results WHERE user_id = %s", (user_id,))
+        user_result_count = cursor.fetchone()[0]
+        remaining_slots = 3 - user_result_count
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": "记录删除成功",
+            "data": {
+                "deleted_record_id": benchmark_id,
+                "user_result_count": user_result_count,
+                "remaining_slots": remaining_slots
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除记录失败: {str(e)}"
+        )
+
+@app.put("/api/v1/benchmarks/{benchmark_id}")
+async def update_benchmark(benchmark_id: int, request: Dict, current_user: dict = Depends(get_current_user_from_token)):
+    """更新基准测试记录"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 获取用户ID - 需要正确处理token中的user_id到数据库主键的映射
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户身份验证失败"
+            )
+
+        
+        # 检查记录是否存在且属于当前用户
+        cursor.execute(
+            "SELECT id FROM benchmark_results WHERE id = %s AND user_id = %s",
+            (benchmark_id, user_id)
+        )
+        record = cursor.fetchone()
+
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="记录不存在或无权限修改"
+            )
+
+        # 获取请求数据
+        cpu_model = request.get("cpu_model", "")
+        cpu_cores = request.get("cpu_cores", 0)
+        memory_gb = request.get("memory_gb", 0)
+        phase1_wall_time = request.get("phase1_wall_time", 0)
+        phase2_wall_time = request.get("phase2_wall_time", 0)
+        overall_wall_time = request.get("overall_wall_time", 0)
+        device_type = request.get("device_type", "unknown")
+        device_type_confidence = request.get("device_type_confidence", 0)
+
+        # 更新记录
+        cursor.execute("""
+            UPDATE benchmark_results
+            SET cpu_model = %s,
+                cpu_cores = %s,
+                memory_gb = %s,
+                phase1_wall_time = %s,
+                phase2_wall_time = %s,
+                overall_wall_time = %s,
+                device_type = %s,
+                device_type_confidence = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND user_id = %s
+        """, (
+            cpu_model, cpu_cores, memory_gb, phase1_wall_time, phase2_wall_time,
+            overall_wall_time, device_type, device_type_confidence, benchmark_id, user_id
+        ))
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": "记录更新成功",
+            "data": {
+                "updated_record_id": benchmark_id
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新记录失败: {str(e)}"
+        )
+
+@app.get("/api/v1/benchmarks/{benchmark_id}")
+async def get_benchmark_detail(benchmark_id: int, current_user: dict = Depends(get_current_user_from_token)):
+    """获取单个基准测试记录详情"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 获取用户ID - 需要正确处理token中的user_id到数据库主键的映射
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户身份验证失败"
+            )
+
+        
+        # 获取记录详情，确保记录属于当前用户
+        cursor.execute("""
+            SELECT id, cpu_model, cpu_cores, memory_gb, phase1_wall_time, phase2_wall_time,
+                   overall_wall_time, device_type, device_type_confidence, submitted_at, updated_at
+            FROM benchmark_results
+            WHERE id = %s AND user_id = %s
+        """, (benchmark_id, user_id))
+
+        record = cursor.fetchone()
+
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="记录不存在或无权限访问"
+            )
+
+        cursor.close()
+        conn.close()
+
+        # 返回记录详情
+        return {
+            "success": True,
+            "data": {
+                "id": record[0],
+                "cpu_model": record[1],
+                "cpu_cores": record[2],
+                "memory_gb": record[3],
+                "phase1_wall_time": record[4],
+                "phase2_wall_time": record[5],
+                "overall_wall_time": record[6],
+                "device_type": record[7],
+                "device_type_confidence": record[8],
+                "submitted_at": record[9],
+                "updated_at": record[10]
+            },
+            "message": "获取记录详情成功"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取记录详情失败: {str(e)}"
+        )
+
+if __name__ == "__main__":
+    import uvicorn
+
+    print("Starting Benchmark Platform with OAuth authentication...")
+    print("Visit http://localhost:8000/docs to view API documentation")
+    print("Visit http://localhost:8000/api/v1/auth/login to start authentication")
+
+    # 检查和初始化数据库
+    print("检查数据库状态...")
+    try:
+        check_database_exists()
+    except Exception as e:
+        print(f"数据库初始化失败: {e}")
+        print("请检查数据库连接配置")
+
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
