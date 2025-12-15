@@ -18,9 +18,9 @@ from app.dependencies.auth import get_current_user_from_token
 from app.config import (
     CLIENT_ID, CLIENT_SECRET, REDIRECT_URI,
     AUTHORIZATION_ENDPOINT, TOKEN_ENDPOINT, USER_ENDPOINT,
+    ENABLE_MOCK_LOGIN,
     get_frontend_url
 )
-from app.core.config import settings
 
 router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
 
@@ -242,7 +242,7 @@ async def logout():
 @router.post("/mock-login")
 async def mock_login(request: MockLoginRequest):
     """Mock登录 - 仅用于本地测试"""
-    if not settings.ENABLE_MOCK_LOGIN:
+    if not ENABLE_MOCK_LOGIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Mock登录功能已禁用"

@@ -27,6 +27,9 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",") if os.getenv("ALL
     "*"  # 开发环境允许所有来源，生产环境请移除
 ]
 
+# Mock登录开关（仅用于开发环境，生产环境必须关闭）
+ENABLE_MOCK_LOGIN = os.getenv("ENABLE_MOCK_LOGIN", "false").lower() in ("true", "1", "yes")
+
 # 前端URL获取函数
 def get_frontend_url():
     """获取前端URL"""
