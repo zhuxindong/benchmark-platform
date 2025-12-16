@@ -9,7 +9,7 @@
 ### 后端
 - **框架**: FastAPI 0.104.1
 - **数据库**: MySQL 8.0+
-- **数据库访问**: PyMySQL 1.1.0（直接连接）
+- **数据库访问**: SQLAlchemy 2.0.23 + PyMySQL 1.1.0（ORM + 连接池）✨
 - **认证**:
   - linux.do OAuth 2.0
   - 标准 JWT (python-jose) ✨
@@ -103,7 +103,7 @@ benchmark-platform/
 │   │   │   ├── database.py
 │   │   │   └── logging.py
 │   │   │
-│   │   ├── models/             # 数据模型 (SQLAlchemy，未使用)
+│   │   ├── models/             # 数据模型 (SQLAlchemy ORM) ✨ (v7.0 启用)
 │   │   │   ├── user.py
 │   │   │   └── benchmark.py
 │   │   │
@@ -350,10 +350,11 @@ mysql -u root -p < backend/init.sql
 
 ## 主要特性
 
-### ✅ 已实现功能 (v6.0)
+### ✅ 已实现功能 (v7.0)
 - [x] OAuth 用户认证 (linux.do)
 - [x] 标准 JWT 令牌 (python-jose) ✨
 - [x] Cookie-based 认证 ✨
+- [x] SQLAlchemy ORM + 连接池 ✨ (v7.0)
 - [x] 基准测试结果提交
 - [x] 用户记录限制 (每用户最多3条)
 - [x] 设备类型自动分类
@@ -477,6 +478,13 @@ mysql -u root -p < backend/init.sql
    - 查看认证 Token
 
 ## 版本历史
+
+### v7.0 (2025-12-16) - ORM 迁移 ✨
+- ✅ 完整 ORM 迁移：所有端点从 PyMySQL 直接连接迁移到 SQLAlchemy ORM
+- ✅ 连接池实现：QueuePool (pool_size=10, max_overflow=20)
+- ✅ 数据库初始化：使用 SQLAlchemy engine 替代 PyMySQL
+- ✅ 代码清理：移除 get_db_connection() 函数和 PyMySQL 直接调用
+- ✅ 性能优化：统一使用 ORM 查询，提升代码可维护性
 
 ### v6.0 (2025-12-14) - 重大重构 ✨
 - ✅ JWT 安全修复：使用标准 python-jose 库

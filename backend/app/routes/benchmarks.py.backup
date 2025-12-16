@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 基准测试相关路由 - 使用 ORM
 """
@@ -193,57 +193,67 @@ async def submit_benchmark_result(
 
 
 @router.get("/leaderboard")
-async def get_leaderboard(
-    device_type: Optional[str] = None,
-    limit: int = 20,
-    page: int = 1,
-    reverse: bool = False,
-    db: Session = Depends(get_db)
-):
+async def get_leaderboard(device_type: Optional[str] = None, limit: int = 20, page: int = 1, reverse: bool = False):
     """获取排行榜数据"""
     try:
+        db = get_db_connection()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
         # 计算偏移量
         offset = (page - 1) * limit
 
-        # 构建查询
-        query = db.query(BenchmarkResult, User).join(
-            User, BenchmarkResult.user_id == User.id
-        ).filter(BenchmarkResult.overall_wall_time.isnot(None))
+        # 构建WHERE条件
+        where_conditions = ["br.overall_wall_time IS NOT NULL"]
+        params = []
 
         if device_type:
-            query = query.filter(BenchmarkResult.device_type == device_type)
+            where_conditions.append("br.device_type = %s")
+            params.append(device_type)
+
+        where_clause = " AND ".join(where_conditions)
 
         # 根据 reverse 参数决定排序方向
-        if reverse:
-            query = query.order_by(BenchmarkResult.overall_wall_time.desc())
-        else:
-            query = query.order_by(BenchmarkResult.overall_wall_time.asc())
+        order_direction = "DESC" if reverse else "ASC"
 
-        # 获取总数
-        total = query.count()
+        # 获取排行榜数据
+        cursor.execute(f"""
+            SELECT br.*, u.username, u.avatar_url
+            FROM benchmark_results br
+            JOIN users u ON br.user_id = u.id
+            WHERE {where_clause}
+            ORDER BY br.overall_wall_time {order_direction}
+            LIMIT %s OFFSET %s
+        """, params + [limit, offset])
 
-        # 应用分页
-        results = query.limit(limit).offset(offset).all()
+        results = cursor.fetchall()
 
         # 格式化数据
         leaderboard = []
         rank = offset + 1
-        for benchmark, user in results:
+        for result in results:
             leaderboard.append({
                 "rank": rank,
-                "username": user.username,
-                "avatar_url": user.avatar_url,
-                "cpu_model": benchmark.cpu_model,
-                "cpu_cores": benchmark.cpu_cores,
-                "memory_gb": float(benchmark.memory_gb) if benchmark.memory_gb else None,
-                "phase1_wall_time": float(benchmark.phase1_wall_time) if benchmark.phase1_wall_time else None,
-                "phase2_wall_time": float(benchmark.phase2_wall_time) if benchmark.phase2_wall_time else None,
-                "overall_wall_time": float(benchmark.overall_wall_time) if benchmark.overall_wall_time else None,
-                "device_type": benchmark.device_type.value if benchmark.device_type else "unknown",
-                "device_type_confidence": float(benchmark.device_type_confidence) if benchmark.device_type_confidence else 0.0,
-                "submitted_at": benchmark.submitted_at.isoformat() if benchmark.submitted_at else None
+                "username": result["username"],
+                "avatar_url": result["avatar_url"],
+                "cpu_model": result["cpu_model"],
+                "cpu_cores": result["cpu_cores"],
+                "memory_gb": float(result["memory_gb"]) if result["memory_gb"] else None,
+                "phase1_wall_time": float(result["phase1_wall_time"]) if result["phase1_wall_time"] else None,
+                "phase2_wall_time": float(result["phase2_wall_time"]) if result["phase2_wall_time"] else None,
+                "overall_wall_time": float(result["overall_wall_time"]) if result["overall_wall_time"] else None,
+                "device_type": result.get("device_type", "unknown"),
+                "device_type_confidence": float(result["device_type_confidence"]) if result.get("device_type_confidence") else 0.0,
+                "submitted_at": result["submitted_at"].isoformat() if result["submitted_at"] else None
             })
             rank += 1
+
+        # 获取总数
+        count_params = params.copy() if params else []
+        cursor.execute(f"SELECT COUNT(*) as total FROM benchmark_results br WHERE {where_clause}", count_params)
+        total = cursor.fetchone()["total"]
+
+        cursor.close()
+        db.close()
 
         return {
             "success": True,
@@ -266,20 +276,30 @@ async def get_leaderboard(
 
 
 @router.get("/my-result")
-async def get_my_benchmark_result(
-    current_user: User = Depends(get_current_user_from_token),
-    db: Session = Depends(get_db)
-):
+async def get_my_benchmark_result(current_user = Depends(get_current_user_from_token)):
     """获取当前用户的基准测试结果"""
     try:
-        # 查询用户的所有基准测试结果
-        results = db.query(BenchmarkResult).filter(
-            BenchmarkResult.user_id == current_user.id
-        ).order_by(BenchmarkResult.submitted_at.desc()).all()
+        db = get_db_connection()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
+        cursor.execute("""
+            SELECT br.*, u.username, u.avatar_url
+            FROM benchmark_results br
+            JOIN users u ON br.user_id = u.id
+            WHERE br.user_id = %s
+            ORDER BY br.submitted_at DESC
+        """, (current_user["id"],))
+
+        results = cursor.fetchall()
 
         # 获取用户总记录数
-        total_count = len(results)
+        cursor.execute("SELECT COUNT(*) as total_count FROM benchmark_results WHERE user_id = %s", (current_user["id"],))
+        count_result = cursor.fetchone()
+        total_count = count_result["total_count"]
         remaining_slots = max(0, 3 - total_count)
+
+        cursor.close()
+        db.close()
 
         if not results:
             return {
@@ -296,19 +316,19 @@ async def get_my_benchmark_result(
         formatted_results = []
         for result in results:
             formatted_results.append({
-                "id": result.id,
-                "username": current_user.username,
-                "avatar_url": current_user.avatar_url,
-                "cpu_model": result.cpu_model,
-                "cpu_cores": result.cpu_cores,
-                "memory_gb": float(result.memory_gb) if result.memory_gb else None,
-                "phase1_wall_time": float(result.phase1_wall_time) if result.phase1_wall_time else None,
-                "phase2_wall_time": float(result.phase2_wall_time) if result.phase2_wall_time else None,
-                "overall_wall_time": float(result.overall_wall_time) if result.overall_wall_time else None,
-                "device_type": result.device_type.value if result.device_type else "unknown",
-                "device_type_confidence": float(result.device_type_confidence) if result.device_type_confidence else 0.0,
-                "submitted_at": result.submitted_at.isoformat() if result.submitted_at else None,
-                "updated_at": result.updated_at.isoformat() if result.updated_at else None
+                "id": result["id"],
+                "username": result["username"],
+                "avatar_url": result["avatar_url"],
+                "cpu_model": result["cpu_model"],
+                "cpu_cores": result["cpu_cores"],
+                "memory_gb": float(result["memory_gb"]) if result["memory_gb"] else None,
+                "phase1_wall_time": float(result["phase1_wall_time"]) if result["phase1_wall_time"] else None,
+                "phase2_wall_time": float(result["phase2_wall_time"]) if result["phase2_wall_time"] else None,
+                "overall_wall_time": float(result["overall_wall_time"]) if result["overall_wall_time"] else None,
+                "device_type": result.get("device_type", "unknown"),
+                "device_type_confidence": float(result["device_type_confidence"]) if result.get("device_type_confidence") else 0.0,
+                "submitted_at": result["submitted_at"].isoformat() if result["submitted_at"] else None,
+                "updated_at": result["updated_at"].isoformat() if result["updated_at"] else None
             })
 
         return {
@@ -332,24 +352,36 @@ async def get_my_benchmark_result(
 async def get_my_ranks(
     device_type: Optional[str] = None,
     reverse: bool = False,
-    current_user: User = Depends(get_current_user_from_token),
-    db: Session = Depends(get_db)
+    current_user = Depends(get_current_user_from_token)
 ):
     """获取当前用户在排行榜中的所有排名信息"""
     try:
-        # 构建查询条件
-        query = db.query(BenchmarkResult).filter(
-            BenchmarkResult.user_id == current_user.id,
-            BenchmarkResult.overall_wall_time.isnot(None)
-        )
+        db = get_db_connection()
+        cursor = db.cursor(pymysql.cursors.DictCursor)
+
+        # 构建WHERE条件
+        where_conditions = ["br.overall_wall_time IS NOT NULL", "br.user_id = %s"]
+        params = [current_user["id"]]
 
         if device_type:
-            query = query.filter(BenchmarkResult.device_type == device_type)
+            where_conditions.append("br.device_type = %s")
+            params.append(device_type)
+
+        where_clause = " AND ".join(where_conditions)
 
         # 获取用户的所有记录
-        user_records = query.order_by(BenchmarkResult.overall_wall_time.asc()).all()
+        cursor.execute(f"""
+            SELECT br.*
+            FROM benchmark_results br
+            WHERE {where_clause}
+            ORDER BY br.overall_wall_time ASC
+        """, params)
+
+        user_records = cursor.fetchall()
 
         if not user_records:
+            cursor.close()
+            db.close()
             return {
                 "success": True,
                 "data": {"records": []},
@@ -359,27 +391,42 @@ async def get_my_ranks(
         # 为每条记录计算排名
         records_with_ranks = []
         for record in user_records:
-            # 构建排名查询条件
-            rank_query = db.query(func.count(BenchmarkResult.id)).filter(
-                BenchmarkResult.overall_wall_time.isnot(None)
-            )
+            rank_where_conditions = ["overall_wall_time IS NOT NULL"]
+            rank_params = []
 
             if device_type:
-                rank_query = rank_query.filter(BenchmarkResult.device_type == device_type)
+                rank_where_conditions.append("device_type = %s")
+                rank_params.append(device_type)
+
+            rank_where_clause = " AND ".join(rank_where_conditions)
 
             # 根据reverse参数决定排名计算方式
             if reverse:
-                rank = rank_query.filter(BenchmarkResult.overall_wall_time > record.overall_wall_time).scalar() + 1
+                cursor.execute(f"""
+                    SELECT COUNT(*) + 1 as `rank`
+                    FROM benchmark_results
+                    WHERE {rank_where_clause}
+                    AND overall_wall_time > %s
+                """, rank_params + [record["overall_wall_time"]])
             else:
-                rank = rank_query.filter(BenchmarkResult.overall_wall_time < record.overall_wall_time).scalar() + 1
+                cursor.execute(f"""
+                    SELECT COUNT(*) + 1 as `rank`
+                    FROM benchmark_results
+                    WHERE {rank_where_clause}
+                    AND overall_wall_time < %s
+                """, rank_params + [record["overall_wall_time"]])
+
+            rank_result = cursor.fetchone()
+            rank = rank_result["rank"]
 
             # 获取总数
-            total_query = db.query(func.count(BenchmarkResult.id)).filter(
-                BenchmarkResult.overall_wall_time.isnot(None)
-            )
-            if device_type:
-                total_query = total_query.filter(BenchmarkResult.device_type == device_type)
-            total = total_query.scalar()
+            cursor.execute(f"""
+                SELECT COUNT(*) as total
+                FROM benchmark_results
+                WHERE {rank_where_clause}
+            """, rank_params)
+            total_result = cursor.fetchone()
+            total = total_result["total"]
 
             # 计算所在页码
             page = (rank - 1) // 20 + 1
@@ -388,11 +435,14 @@ async def get_my_ranks(
                 "rank": rank,
                 "total": total,
                 "page": page,
-                "device_type": record.device_type.value if record.device_type else "unknown",
-                "cpu_model": record.cpu_model,
-                "overall_wall_time": float(record.overall_wall_time) if record.overall_wall_time else None,
-                "record_id": record.id
+                "device_type": record.get("device_type", "unknown"),
+                "cpu_model": record["cpu_model"],
+                "overall_wall_time": float(record["overall_wall_time"]) if record["overall_wall_time"] else None,
+                "record_id": record["id"]
             })
+
+        cursor.close()
+        db.close()
 
         return {
             "success": True,
@@ -407,17 +457,27 @@ async def get_my_ranks(
 
 
 @router.get("/{benchmark_id}")
-async def get_benchmark_detail(
-    benchmark_id: int,
-    current_user: User = Depends(get_current_user_from_token),
-    db: Session = Depends(get_db)
-):
+async def get_benchmark_detail(benchmark_id: int, current_user: dict = Depends(get_current_user_from_token)):
     """获取单个基准测试记录详情"""
     try:
-        record = db.query(BenchmarkResult).filter(
-            BenchmarkResult.id == benchmark_id,
-            BenchmarkResult.user_id == current_user.id
-        ).first()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户身份验证失败"
+            )
+
+        cursor.execute("""
+            SELECT id, cpu_model, cpu_cores, memory_gb, phase1_wall_time, phase2_wall_time,
+                   overall_wall_time, device_type, device_type_confidence, submitted_at, updated_at
+            FROM benchmark_results
+            WHERE id = %s AND user_id = %s
+        """, (benchmark_id, user_id))
+
+        record = cursor.fetchone()
 
         if not record:
             raise HTTPException(
@@ -425,20 +485,23 @@ async def get_benchmark_detail(
                 detail="记录不存在或无权限访问"
             )
 
+        cursor.close()
+        conn.close()
+
         return {
             "success": True,
             "data": {
-                "id": record.id,
-                "cpu_model": record.cpu_model,
-                "cpu_cores": record.cpu_cores,
-                "memory_gb": float(record.memory_gb) if record.memory_gb else None,
-                "phase1_wall_time": float(record.phase1_wall_time) if record.phase1_wall_time else None,
-                "phase2_wall_time": float(record.phase2_wall_time) if record.phase2_wall_time else None,
-                "overall_wall_time": float(record.overall_wall_time) if record.overall_wall_time else None,
-                "device_type": record.device_type.value if record.device_type else "unknown",
-                "device_type_confidence": float(record.device_type_confidence) if record.device_type_confidence else 0.0,
-                "submitted_at": record.submitted_at.isoformat() if record.submitted_at else None,
-                "updated_at": record.updated_at.isoformat() if record.updated_at else None
+                "id": record[0],
+                "cpu_model": record[1],
+                "cpu_cores": record[2],
+                "memory_gb": record[3],
+                "phase1_wall_time": record[4],
+                "phase2_wall_time": record[5],
+                "overall_wall_time": record[6],
+                "device_type": record[7],
+                "device_type_confidence": record[8],
+                "submitted_at": record[9],
+                "updated_at": record[10]
             },
             "message": "获取记录详情成功"
         }
@@ -453,19 +516,25 @@ async def get_benchmark_detail(
 
 
 @router.put("/{benchmark_id}")
-async def update_benchmark(
-    benchmark_id: int,
-    request: Dict,
-    current_user: User = Depends(get_current_user_from_token),
-    db: Session = Depends(get_db)
-):
+async def update_benchmark(benchmark_id: int, request: Dict, current_user: dict = Depends(get_current_user_from_token)):
     """更新基准测试记录"""
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户身份验证失败"
+            )
+
         # 检查记录是否存在且属于当前用户
-        record = db.query(BenchmarkResult).filter(
-            BenchmarkResult.id == benchmark_id,
-            BenchmarkResult.user_id == current_user.id
-        ).first()
+        cursor.execute(
+            "SELECT id FROM benchmark_results WHERE id = %s AND user_id = %s",
+            (benchmark_id, user_id)
+        )
+        record = cursor.fetchone()
 
         if not record:
             raise HTTPException(
@@ -473,22 +542,37 @@ async def update_benchmark(
                 detail="记录不存在或无权限修改"
             )
 
-        # 更新记录字段
-        record.cpu_model = request.get("cpu_model", record.cpu_model)
-        record.cpu_cores = request.get("cpu_cores", record.cpu_cores)
-        record.memory_gb = request.get("memory_gb", record.memory_gb)
-        record.phase1_wall_time = request.get("phase1_wall_time", record.phase1_wall_time)
-        record.phase2_wall_time = request.get("phase2_wall_time", record.phase2_wall_time)
-        record.overall_wall_time = request.get("overall_wall_time", record.overall_wall_time)
+        # 获取请求数据
+        cpu_model = request.get("cpu_model", "")
+        cpu_cores = request.get("cpu_cores", 0)
+        memory_gb = request.get("memory_gb", 0)
+        phase1_wall_time = request.get("phase1_wall_time", 0)
+        phase2_wall_time = request.get("phase2_wall_time", 0)
+        overall_wall_time = request.get("overall_wall_time", 0)
+        device_type = request.get("device_type", "unknown")
+        device_type_confidence = request.get("device_type_confidence", 0)
 
-        device_type_str = request.get("device_type")
-        if device_type_str:
-            record.device_type = DeviceType[device_type_str] if device_type_str in ['server', 'consumer', 'unknown'] else DeviceType.unknown
+        # 更新记录
+        cursor.execute("""
+            UPDATE benchmark_results
+            SET cpu_model = %s,
+                cpu_cores = %s,
+                memory_gb = %s,
+                phase1_wall_time = %s,
+                phase2_wall_time = %s,
+                overall_wall_time = %s,
+                device_type = %s,
+                device_type_confidence = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND user_id = %s
+        """, (
+            cpu_model, cpu_cores, memory_gb, phase1_wall_time, phase2_wall_time,
+            overall_wall_time, device_type, device_type_confidence, benchmark_id, user_id
+        ))
 
-        record.device_type_confidence = request.get("device_type_confidence", record.device_type_confidence)
-        record.updated_at = datetime.now(timezone.utc)
-
-        db.commit()
+        conn.commit()
+        cursor.close()
+        conn.close()
 
         return {
             "success": True,
@@ -501,7 +585,6 @@ async def update_benchmark(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"更新记录失败: {str(e)}"
@@ -509,18 +592,23 @@ async def update_benchmark(
 
 
 @router.delete("/{benchmark_id}")
-async def delete_benchmark(
-    benchmark_id: int,
-    current_user: User = Depends(get_current_user_from_token),
-    db: Session = Depends(get_db)
-):
+async def delete_benchmark(benchmark_id: int, current_user: dict = Depends(get_current_user_from_token)):
     """删除基准测试记录"""
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        user_id = current_user.get("id")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户身份验证失败"
+            )
+
         # 检查记录是否存在且属于当前用户
-        record = db.query(BenchmarkResult).filter(
-            BenchmarkResult.id == benchmark_id,
-            BenchmarkResult.user_id == current_user.id
-        ).first()
+        check_sql = "SELECT id, cpu_model, overall_wall_time, user_id FROM benchmark_results WHERE id = %s AND user_id = %s"
+        cursor.execute(check_sql, (benchmark_id, user_id))
+        record = cursor.fetchone()
 
         if not record:
             raise HTTPException(
@@ -529,14 +617,16 @@ async def delete_benchmark(
             )
 
         # 删除记录
-        db.delete(record)
-        db.commit()
+        cursor.execute("DELETE FROM benchmark_results WHERE id = %s AND user_id = %s", (benchmark_id, user_id))
+        conn.commit()
 
         # 获取用户更新后的记录数量
-        user_result_count = db.query(BenchmarkResult).filter(
-            BenchmarkResult.user_id == current_user.id
-        ).count()
+        cursor.execute("SELECT COUNT(*) FROM benchmark_results WHERE user_id = %s", (user_id,))
+        user_result_count = cursor.fetchone()[0]
         remaining_slots = 3 - user_result_count
+
+        cursor.close()
+        conn.close()
 
         return {
             "success": True,
@@ -551,7 +641,6 @@ async def delete_benchmark(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"删除记录失败: {str(e)}"

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-认证相关路由
+认证相关路由 - 使用 ORM
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -8,13 +8,14 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import httpx
-import pymysql
 import secrets
 from urllib.parse import urlencode
+from sqlalchemy.orm import Session
 
-from app.dependencies.database import get_db_connection
+from app.dependencies.database import get_db
 from app.dependencies.jwt_utils import create_jwt_token, verify_token
 from app.dependencies.auth import get_current_user_from_token
+from app.models import User
 from app.config import (
     CLIENT_ID, CLIENT_SECRET, REDIRECT_URI,
     AUTHORIZATION_ENDPOINT, TOKEN_ENDPOINT, USER_ENDPOINT,
@@ -69,18 +70,18 @@ async def login():
 
 
 @router.post("/linuxdo/callback")
-async def linuxdo_callback_post(request: CallbackRequest):
+async def linuxdo_callback_post(request: CallbackRequest, db: Session = Depends(get_db)):
     """处理OAuth回调 - POST方法"""
-    return await _process_oauth_callback(request.code)
+    return await _process_oauth_callback(request.code, db)
 
 
 @router.get("/linuxdo/callback")
-async def linuxdo_callback_get(code: str, state: str = None):
+async def linuxdo_callback_get(code: str, state: str = None, db: Session = Depends(get_db)):
     """处理OAuth回调 - GET方法"""
-    return await _process_oauth_callback(code)
+    return await _process_oauth_callback(code, db)
 
 
-async def _process_oauth_callback(code: str):
+async def _process_oauth_callback(code: str, db: Session):
     """处理OAuth回调的通用逻辑"""
     try:
         # 交换访问令牌
@@ -127,62 +128,47 @@ async def _process_oauth_callback(code: str):
                 detail="无法获取用户信息"
             )
 
-        # 查找或创建用户
-        db = get_db_connection()
-        cursor = db.cursor(pymysql.cursors.DictCursor)
+        # 查找或创建用户 - 使用 ORM
+        linux_do_user_id = str(user.get("id"))
+        username = user.get("username")
 
-        cursor.execute("SELECT * FROM users WHERE user_id = %s OR username = %s",
-                      (str(user.get("id")), user.get("username")))
-        existing_user = cursor.fetchone()
+        existing_user = db.query(User).filter(
+            (User.user_id == linux_do_user_id) | (User.username == username)
+        ).first()
 
         if existing_user:
             # 更新现有用户
-            cursor.execute("""
-                UPDATE users SET
-                    username = %s, email = %s, avatar_url = %s, updated_at = %s
-                WHERE id = %s
-            """, (
-                user.get("username"),
-                user.get("email"),
-                user.get("avatar_template", "").replace("{size}", "120"),
-                datetime.now(timezone.utc),
-                existing_user["id"]
-            ))
-            user_id = existing_user["id"]
+            existing_user.username = username
+            existing_user.email = user.get("email")
+            existing_user.avatar_url = user.get("avatar_template", "").replace("{size}", "120")
+            existing_user.updated_at = datetime.now(timezone.utc)
+            user_record = existing_user
         else:
             # 创建新用户
-            cursor.execute("""
-                INSERT INTO users (username, user_id, email, avatar_url, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
-                user.get("username"),
-                str(user.get("id")),
-                user.get("email"),
-                user.get("avatar_template", "").replace("{size}", "120"),
-                datetime.now(timezone.utc),
-                datetime.now(timezone.utc)
-            ))
-            user_id = cursor.lastrowid
-
-        # 获取用户信息
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-        user_record = cursor.fetchone()
+            user_record = User(
+                username=username,
+                user_id=linux_do_user_id,
+                email=user.get("email"),
+                avatar_url=user.get("avatar_template", "").replace("{size}", "120"),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            db.add(user_record)
 
         db.commit()
-        cursor.close()
-        db.close()
+        db.refresh(user_record)
 
         # 创建JWT令牌
         token_data = {
-            "user_id": int(user_record["id"]),
-            "username": str(user_record["username"]),
-            "user_do_id": str(user_record["user_id"])
+            "user_id": int(user_record.id),
+            "username": str(user_record.username),
+            "user_do_id": str(user_record.user_id)
         }
         access_token = create_jwt_token(token_data)
 
         # 重定向到前端OAuth回调页面
         frontend_url = f"{get_frontend_url()}/oauth/callback"
-        redirect_params = f"?success=true&username={user_record['username']}&user_id={user_record['id']}&user_do_id={user_record['user_id']}&avatar_url={user_record.get('avatar_url', '')}&email={user_record.get('email', '')}"
+        redirect_params = f"?success=true&username={user_record.username}&user_id={user_record.id}&user_do_id={user_record.user_id}&avatar_url={user_record.avatar_url or ''}&email={user_record.email or ''}"
 
         response = RedirectResponse(url=f"{frontend_url}{redirect_params}", status_code=302)
         # 设置cookie
@@ -215,15 +201,15 @@ async def _process_oauth_callback(code: str):
 
 
 @router.get("/me")
-async def get_current_user_info(current_user = Depends(get_current_user_from_token)):
+async def get_current_user_info(current_user: User = Depends(get_current_user_from_token)):
     """获取当前用户信息"""
     return {
-        "id": current_user["id"],
-        "username": current_user["username"],
-        "user_id": current_user["user_id"],
-        "email": current_user["email"],
-        "avatar_url": current_user["avatar_url"],
-        "created_at": current_user["created_at"].isoformat() if current_user["created_at"] else None
+        "id": current_user.id,
+        "username": current_user.username,
+        "user_id": current_user.user_id,
+        "email": current_user.email,
+        "avatar_url": current_user.avatar_url,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
 
 
@@ -240,7 +226,7 @@ async def logout():
 
 
 @router.post("/mock-login")
-async def mock_login(request: MockLoginRequest):
+async def mock_login(request: MockLoginRequest, db: Session = Depends(get_db)):
     """Mock登录 - 仅用于本地测试"""
     if not ENABLE_MOCK_LOGIN:
         raise HTTPException(
@@ -249,47 +235,35 @@ async def mock_login(request: MockLoginRequest):
         )
 
     try:
-        db = get_db_connection()
-        cursor = db.cursor(pymysql.cursors.DictCursor)
-
-        cursor.execute("SELECT * FROM users WHERE username = %s", (request.username,))
-        existing_user = cursor.fetchone()
+        # 查找现有用户
+        existing_user = db.query(User).filter(User.username == request.username).first()
 
         if existing_user:
-            cursor.execute("""
-                UPDATE users SET email = %s, updated_at = %s WHERE id = %s
-            """, (
-                request.email or existing_user["email"],
-                datetime.now(timezone.utc),
-                existing_user["id"]
-            ))
-            user_id = existing_user["id"]
+            # 更新现有用户
+            if request.email:
+                existing_user.email = request.email
+            existing_user.updated_at = datetime.now(timezone.utc)
+            user_record = existing_user
         else:
+            # 创建新用户
             mock_user_id = f"mock_{secrets.token_urlsafe(8)}"
-            cursor.execute("""
-                INSERT INTO users (username, user_id, email, avatar_url, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
-                request.username,
-                mock_user_id,
-                request.email,
-                f"https://ui-avatars.com/api/?name={request.username}&background=667eea&color=fff",
-                datetime.now(timezone.utc),
-                datetime.now(timezone.utc)
-            ))
-            user_id = cursor.lastrowid
-
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-        user_record = cursor.fetchone()
+            user_record = User(
+                username=request.username,
+                user_id=mock_user_id,
+                email=request.email,
+                avatar_url=f"https://ui-avatars.com/api/?name={request.username}&background=667eea&color=fff",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            db.add(user_record)
 
         db.commit()
-        cursor.close()
-        db.close()
+        db.refresh(user_record)
 
         token_data = {
-            "user_id": int(user_record["id"]),
-            "username": str(user_record["username"]),
-            "user_do_id": str(user_record["user_id"])
+            "user_id": int(user_record.id),
+            "username": str(user_record.username),
+            "user_do_id": str(user_record.user_id)
         }
         access_token = create_jwt_token(token_data)
 
@@ -297,11 +271,11 @@ async def mock_login(request: MockLoginRequest):
             "success": True,
             "message": "Mock登录成功",
             "user": {
-                "id": user_record["id"],
-                "username": user_record["username"],
-                "user_id": user_record["user_id"],
-                "email": user_record.get("email"),
-                "avatar_url": user_record.get("avatar_url")
+                "id": user_record.id,
+                "username": user_record.username,
+                "user_id": user_record.user_id,
+                "email": user_record.email,
+                "avatar_url": user_record.avatar_url
             }
         })
 

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-认证依赖注入
+认证依赖注入 - 使用 ORM
 """
-import pymysql
 from fastapi import HTTPException, status, Request, Depends
-from typing import Optional
+from sqlalchemy.orm import Session
 from app.dependencies.jwt_utils import verify_token
-from app.dependencies.database import get_db_connection
+from app.dependencies.database import get_db
+from app.models import User
 
 
-def get_current_user_from_token(request: Request):
+def get_current_user_from_token(request: Request, db: Session = Depends(get_db)):
     """从请求中获取当前用户"""
     # 首先尝试从cookie获取token
     token = request.cookies.get("auth_token")
@@ -41,14 +41,9 @@ def get_current_user_from_token(request: Request):
             detail="令牌中缺少用户信息"
         )
 
-    # 从数据库获取用户信息
+    # 从数据库获取用户信息 - 使用 ORM
     try:
-        db = get_db_connection()
-        cursor = db.cursor(pymysql.cursors.DictCursor)
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-        user = cursor.fetchone()
-        cursor.close()
-        db.close()
+        user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
             raise HTTPException(
