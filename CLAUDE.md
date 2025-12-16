@@ -245,7 +245,9 @@ OAUTH_CLIENT_ID=<your-oauth-client-id>
 OAUTH_CLIENT_SECRET=<your-oauth-client-secret>
 OAUTH_CALLBACK_URL=http://localhost:8000/api/v1/auth/linuxdo/callback
 
-# 前端URL（开发环境）
+# 前端URL（开发环境使用，生产环境注释掉）
+# 开发模式: FRONTEND_URL=http://localhost:3000
+# 生产模式: 不设置（默认与后端同域，使用 8000 端口）
 FRONTEND_URL=http://localhost:3000
 
 # 应用配置
@@ -277,24 +279,22 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
    docker build -t benchmark-platform:latest .
    ```
 
-2. **运行容器**:
+2. **运行容器（单端口部署）**:
    ```bash
    docker run -d \
-     -p 3100:3000 \
      -p 8000:8000 \
      --name benchmark-platform \
      -e DATABASE_URL="mysql://user:password@host:port/database" \
      -e OAUTH_CLIENT_ID="<your-client-id>" \
      -e OAUTH_CLIENT_SECRET="<your-client-secret>" \
-     -e OAUTH_CALLBACK_URL="https://yourdomain.com/api/v1/auth/linuxdo/callback" \
+     -e OAUTH_CALLBACK_URL="https://yourdomain.com:8000/api/v1/auth/linuxdo/callback" \
      -e SECRET_KEY="<your-generated-secret-key>" \
      benchmark-platform:latest
    ```
 
 ### 访问地址
-- 前端界面: http://localhost:3100
+- 应用界面: http://localhost:8000
 - API文档: http://localhost:8000/docs
-- API服务: http://localhost:8000
 - 健康检查: http://localhost:8000/health
 
 ## 开发指南
@@ -479,12 +479,14 @@ mysql -u root -p < backend/init.sql
 
 ## 版本历史
 
-### v7.0 (2025-12-16) - ORM 迁移 ✨
-- ✅ 完整 ORM 迁移：所有端点从 PyMySQL 直接连接迁移到 SQLAlchemy ORM
-- ✅ 连接池实现：QueuePool (pool_size=10, max_overflow=20)
-- ✅ 数据库初始化：使用 SQLAlchemy engine 替代 PyMySQL
-- ✅ 代码清理：移除 get_db_connection() 函数和 PyMySQL 直接调用
-- ✅ 性能优化：统一使用 ORM 查询，提升代码可维护性
+### v7.0 (2025-12-16) - ORM 迁移 & Dockerfile 优化 ✨
+- ✅ **ORM 迁移**：所有端点从 PyMySQL 直接连接迁移到 SQLAlchemy ORM
+- ✅ **连接池实现**：QueuePool (pool_size=10, max_overflow=20)
+- ✅ **Dockerfile 优化**：多阶段构建，镜像体积减少 71%（1.5GB → 435MB）
+- ✅ **静态文件服务**：前端打包为静态资源，后端自动 serve
+- ✅ **单端口部署**：前后端统一使用 8000 端口
+- ✅ **安全增强**：非 root 用户运行、健康检查、MIME 类型修复
+- ✅ **代码清理**：移除备份文件和 PyMySQL 直接调用
 
 ### v6.0 (2025-12-14) - 重大重构 ✨
 - ✅ JWT 安全修复：使用标准 python-jose 库

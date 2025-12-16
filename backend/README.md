@@ -6,13 +6,18 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776ab?logo=python)](https://www.python.org/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479a1?logo=mysql)](https://www.mysql.com/)
 
-## ✨ 架构特性 (v6.0)
+## ✨ 架构特性 (v7.0)
 
 ### 模块化设计
 - ✅ **路由模块化**: auth、benchmarks、health 独立路由
 - ✅ **依赖注入**: 统一的数据库和认证依赖管理
 - ✅ **配置集中**: 单一配置文件管理所有环境变量
-- ✅ **代码精简**: 主入口从 1336 行减少到 120 行 (-91%)
+- ✅ **代码精简**: 主入口从 1336 行减少到 105 行 (-92%)
+
+### 数据库优化 (v7.0)
+- ✅ **SQLAlchemy ORM**: 全面迁移到 ORM，提升代码可维护性
+- ✅ **连接池**: QueuePool (pool_size=10, max_overflow=20)
+- ✅ **统一查询**: 所有端点使用 ORM 查询
 
 ### 安全增强
 - ✅ **标准 JWT**: 使用 python-jose 库，符合 RFC 7519
@@ -36,6 +41,7 @@
 | 技术 | 版本 | 用途 |
 |------|------|------|
 | FastAPI | 0.104.1 | Web 框架 |
+| SQLAlchemy | 2.0.23 | ORM 框架 ✨ (v7.0) |
 | python-jose | 3.3.0 | JWT 认证 |
 | PyMySQL | 1.1.0 | 数据库驱动 |
 | Uvicorn | 0.24.0 | ASGI 服务器 |
@@ -147,8 +153,7 @@ backend/
 │   ├── schemas/                # API 模式（待整合）
 │   └── services/               # 业务逻辑（待整合）
 │
-├── app_main.py                 # 主入口 ✨ (120行)
-├── app_main.py.backup          # 原版本备份 (1336行)
+├── app_main.py                 # 主入口 ✨ (105行)
 ├── init.sql                    # 数据库初始化脚本
 ├── requirements.txt            # Python 依赖
 ├── .env                        # 环境变量配置
@@ -650,6 +655,12 @@ ENABLE_MOCK_LOGIN=False
 
 ## 📝 版本历史
 
+### v7.0 (2025-12-16) ✨
+- **ORM 迁移**：全面迁移到 SQLAlchemy ORM
+- **连接池优化**：QueuePool (pool_size=10, max_overflow=20)
+- **代码清理**：移除 PyMySQL 直接连接和备份文件
+- **性能提升**：统一使用 ORM 查询，提升可维护性
+
 ### v6.0 (2025-12-14) ✨
 - JWT 安全升级（python-jose + HMAC-SHA256）
 - 模块化重构（app_main.py: 1336 → 120 行）
@@ -670,6 +681,6 @@ MIT License
 
 ---
 
-**最后更新**: 2025-12-14
-**当前版本**: v6.0
+**最后更新**: 2025-12-16
+**当前版本**: v7.0
 **维护者**: Claude Code Development Team

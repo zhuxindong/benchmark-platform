@@ -42,7 +42,11 @@
       "Bash(Stop-Process -Force)",
       "Bash(ls:*)",
       "Bash(uv run:*)",
-      "Bash(copy:*)"
+      "Bash(copy:*)",
+      "Bash(find:*)",
+      "Bash(for:*)",
+      "Bash(done)",
+      "Bash(pnpm build:*)"
     ],
     "deny": [],
     "ask": []

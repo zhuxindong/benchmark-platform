@@ -29,21 +29,21 @@
 # 1. 拉取镜像
 docker pull zhuxindong/benchmark-platform:latest
 
-# 2. 运行容器
+# 2. 运行容器（单端口部署）
 docker run -d \
-  -p 3100:3000 \
   -p 8000:8000 \
   --name benchmark-platform \
   -e DATABASE_URL="mysql://用户名:密码@数据库地址:3306/数据库名" \
   -e OAUTH_CLIENT_ID="你的OAuth客户端ID" \
   -e OAUTH_CLIENT_SECRET="你的OAuth客户端密钥" \
-  -e OAUTH_CALLBACK_URL="http://你的域名/api/v1/auth/linuxdo/callback" \
+  -e OAUTH_CALLBACK_URL="http://你的域名:8000/api/v1/auth/linuxdo/callback" \
   -e SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" \
   zhuxindong/benchmark-platform:latest
 
-# 3. 访问应用
-# 前端: http://localhost:3100
-# API: http://localhost:8000/docs
+# 3. 访问应用（前后端统一端口）
+# 应用: http://localhost:8000
+# API 文档: http://localhost:8000/docs
+# 健康检查: http://localhost:8000/health
 ```
 
 ### 方法二：本地开发
@@ -53,16 +53,15 @@ docker run -d \
 - Python 3.11+
 - MySQL 8.0+
 
-#### 启动后端
+#### 开发模式（前后端分离）
 ```bash
+# 终端1：启动后端
 cd backend
 pip install -r requirements.txt
 # 或使用 uv 虚拟环境
 uv run python app_main.py
-```
 
-#### 启动前端
-```bash
+# 终端2：启动前端
 pnpm install
 pnpm dev
 ```
@@ -71,6 +70,18 @@ pnpm dev
 - 前端: http://localhost:3000
 - API 文档: http://localhost:8000/docs
 - 健康检查: http://localhost:8000/health
+
+#### 生产模式测试（单端口）
+```bash
+# 1. 构建前端
+pnpm build
+
+# 2. 启动后端（自动serve静态文件）
+cd backend && python app_main.py
+
+# 3. 访问应用
+# http://localhost:8000
+```
 
 ## ⚙️ 环境变量配置
 
@@ -183,8 +194,7 @@ services:
   app:
     image: zhuxindong/benchmark-platform:latest
     ports:
-      - "3100:3000"
-      - "8000:8000"
+      - "8000:8000"  # 单端口部署
     environment:
       - DATABASE_URL=mysql://root:password@mysql:3306/benchmark
       - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
@@ -299,6 +309,12 @@ curl http://localhost:8000/health
 
 ## 📝 版本历史
 
+### v7.0 (2025-12-16) ✨
+- **Dockerfile 优化**：多阶段构建，镜像体积减少 71%（1.5GB → 435MB）
+- **静态文件服务**：前端打包为静态资源，单端口部署（仅 8000）
+- **ORM 迁移**：全面迁移到 SQLAlchemy ORM，连接池优化
+- **安全增强**：非 root 用户运行，健康检查，MIME 类型修复
+
 ### v6.0 (2025-12-14) ✨
 - JWT 安全升级（python-jose + HMAC-SHA256）
 - 模块化重构（app_main.py: 1336 → 120 行）
@@ -333,6 +349,6 @@ MIT License
 
 ---
 
-**最后更新**: 2025-12-14
-**当前版本**: v6.0
+**最后更新**: 2025-12-16
+**当前版本**: v7.0
 **维护者**: Claude Code Development Team

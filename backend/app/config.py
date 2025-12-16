@@ -32,18 +32,17 @@ ENABLE_MOCK_LOGIN = os.getenv("ENABLE_MOCK_LOGIN", "false").lower() in ("true", 
 
 # 前端URL获取函数
 def get_frontend_url():
-    """获取前端URL"""
-    # 优先使用环境变量中的FRONTEND_URL（用于开发环境前后端端口不同的情况）
+    """获取前端URL
+
+    通过 FRONTEND_URL 环境变量配置：
+    - 开发模式: FRONTEND_URL=http://localhost:3000
+    - 生产模式: 不设置（默认与后端同域）
+    """
     frontend_url = os.getenv("FRONTEND_URL")
     if frontend_url:
         return frontend_url.rstrip('/')
 
-    # 否则从OAUTH_CALLBACK_URL中提取域名（用于生产环境前后端同域的情况）
-    callback_url = REDIRECT_URI
-    if callback_url:
-        from urllib.parse import urlparse
-        parsed = urlparse(callback_url)
-        return f"{parsed.scheme}://{parsed.netloc}"
-
-    # 兜底默认值
-    return "http://localhost:3000"
+    # 默认：从回调URL提取域名（生产模式，前后端同域）
+    from urllib.parse import urlparse
+    parsed = urlparse(REDIRECT_URI)
+    return f"{parsed.scheme}://{parsed.netloc}"
